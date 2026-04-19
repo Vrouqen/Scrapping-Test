@@ -23,16 +23,13 @@ function buildProfileUrl({ username, url }) {
 
 function parseOgDescription(ogDescription) {
   if (!ogDescription) {
-    return {
-      followers: null,
-      following: null,
-      posts: null
-    };
+    return { followers: null, following: null, posts: null };
   }
 
-  const followersMatch = ogDescription.match(/([\d.,]+)\s+Followers/i);
-  const followingMatch = ogDescription.match(/([\d.,]+)\s+Following/i);
-  const postsMatch = ogDescription.match(/([\d.,]+)\s+Posts?/i);
+  // Bilingüe para inglés y español
+  const followersMatch = ogDescription.match(/([\d.,]+)\s+(Followers|seguidores)/i);
+  const followingMatch = ogDescription.match(/([\d.,]+)\s+(Following|seguidos)/i);
+  const postsMatch = ogDescription.match(/([\d.,]+)\s+(Posts?|publicaciones)/i);
 
   return {
     followers: followersMatch ? followersMatch[1] : null,
@@ -41,6 +38,9 @@ function parseOgDescription(ogDescription) {
   };
 }
 
+// ==========================================
+// FUNCIÓN 1: EXTRAER SOLO DATOS DEL PERFIL
+// ==========================================
 async function scrapeInstagramProfile({ username, url }) {
   const profileUrl = buildProfileUrl({ username, url });
   const headless = String(process.env.HEADLESS || 'true').toLowerCase() !== 'false';
@@ -51,24 +51,20 @@ async function scrapeInstagramProfile({ username, url }) {
   try {
     const contextOptions = {
       viewport: { width: 1366, height: 900 },
-      userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-        '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
     };
 
     if (sessionId) {
       contextOptions.storageState = {
-        cookies: [
-          {
-            name: 'sessionid',
-            value: sessionId,
-            domain: '.instagram.com',
-            path: '/',
-            httpOnly: true,
-            secure: true,
-            sameSite: 'None'
-          }
-        ],
+        cookies: [{
+          name: 'sessionid',
+          value: sessionId,
+          domain: '.instagram.com',
+          path: '/',
+          httpOnly: true,
+          secure: true,
+          sameSite: 'None'
+        }],
         origins: []
       };
     }
@@ -77,7 +73,12 @@ async function scrapeInstagramProfile({ username, url }) {
     const page = await context.newPage();
 
     await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(2500);
+    
+    try {
+      await page.waitForSelector('a[href^="/p/"], a[href^="/reel/"]', { timeout: 10000 });
+    } catch (e) {
+      console.log('No se encontraron posts en la cuadrícula o tardaron mucho en cargar.');
+    }
 
     const data = await page.evaluate(() => {
       const getMeta = (propertyName) => {
@@ -90,7 +91,7 @@ async function scrapeInstagramProfile({ username, url }) {
       const ogImage = getMeta('og:image');
       const canonicalUrl = document.querySelector('link[rel="canonical"]')?.href || null;
 
-      const postLinks = Array.from(document.querySelectorAll('a[href^="/p/"]'))
+      const postLinks = Array.from(document.querySelectorAll('a[href^="/p/"], a[href^="/reel/"]'))
         .map((anchor) => anchor.getAttribute('href'))
         .filter(Boolean)
         .slice(0, 12)
@@ -126,6 +127,108 @@ async function scrapeInstagramProfile({ username, url }) {
   }
 }
 
+// ==========================================
+// FUNCIÓN 2: SCRAPEO PROFUNDO DE PUBLICACIONES
+// ==========================================
+async function scrapeInstagramPosts({ username, url }) {
+  const profileUrl = buildProfileUrl({ username, url });
+  const headless = String(process.env.HEADLESS || 'true').toLowerCase() !== 'false';
+  const sessionId = process.env.INSTAGRAM_SESSIONID;
+
+  const browser = await chromium.launch({ headless });
+
+  try {
+    const contextOptions = {
+      viewport: { width: 1366, height: 900 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+    };
+
+    if (sessionId) {
+      contextOptions.storageState = {
+        cookies: [{
+          name: 'sessionid',
+          value: sessionId,
+          domain: '.instagram.com',
+          path: '/',
+          httpOnly: true,
+          secure: true,
+          sameSite: 'None'
+        }],
+        origins: []
+      };
+    }
+
+    const context = await browser.newContext(contextOptions);
+    const page = await context.newPage();
+
+    await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+
+    try {
+      await page.waitForSelector('a[href*="/p/"], a[href*="/reel/"]', { timeout: 10000 });
+    } catch (e) {
+      await page.screenshot({ path: 'debug_posts.png', fullPage: true });
+      throw new Error('NO_POSTS_FOUND');
+    }
+
+    const postLinks = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]'))
+        .map((anchor) => anchor.getAttribute('href'))
+        .filter(Boolean)
+        .slice(0, 3) // Solo 3 para que no de timeout
+        .map((href) => href.startsWith('http') ? href : `https://www.instagram.com${href}`);
+    });
+
+    if (!postLinks || postLinks.length === 0) {
+      throw new Error('NO_POSTS_FOUND');
+    }
+
+    const detailedPosts = [];
+    
+    // Aquí el bot abre cada foto una por una
+    for (const link of postLinks) {
+      const postPage = await context.newPage();
+      
+      try {
+        await postPage.goto(link, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        
+        const postData = await postPage.evaluate(() => {
+          const getMeta = (prop) => document.querySelector(`meta[property="${prop}"]`)?.getAttribute('content') || '';
+          return {
+            url: document.location.href,
+            image: getMeta('og:image'),
+            description: getMeta('og:description') 
+          };
+        });
+
+        const likesMatch = postData.description.match(/([\d.,]+)\s+(likes|Me gusta)/i);
+        const commentsMatch = postData.description.match(/([\d.,]+)\s+(comments|comentarios)/i);
+
+        detailedPosts.push({
+          url: postData.url,
+          imageUrl: postData.image,
+          likes: likesMatch ? likesMatch[1] : "0",
+          comments: commentsMatch ? commentsMatch[1] : "0",
+          caption: postData.description
+        });
+        
+      } catch (postError) {
+        console.log(`Error al extraer el post ${link}:`, postError.message);
+      } finally {
+        await postPage.close();
+      }
+    }
+
+    return {
+      requestedUrl: profileUrl,
+      postsCount: detailedPosts.length,
+      recentPosts: detailedPosts
+    };
+  } finally {
+    await browser.close();
+  }
+}
+
 module.exports = {
-  scrapeInstagramProfile
+  scrapeInstagramProfile,
+  scrapeInstagramPosts
 };
