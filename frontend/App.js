@@ -13,13 +13,20 @@ import { COLORS } from './src/theme';
 const Tab = createBottomTabNavigator();
 
 // Pantallas de relleno por ahora
-const PlaceholderScreen = () => <View style={styles.center}><Text>Próximamente...</Text></View>;
+const PlaceholderScreen = () => (
+  <View style={styles.center}>
+    <MaterialIcons name="construction" size={60} color={COLORS.outline} />
+    <Text style={styles.emptyText}>Próximamente...</Text>
+  </View>
+);
 
 export default function App() {
   return (
     <NavigationContainer>
       <Header />
       <Tab.Navigator
+        // Definimos 'Search' como la pantalla inicial obligatoria
+        initialRouteName="Search"
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarShowLabel: true,
@@ -60,16 +67,50 @@ export default function App() {
           },
         })}
       >
-        <Tab.Screen name="Search" component={SearchScreen} />
-        <Tab.Screen name="Gallery" component={GalleryScreen} /> 
-        <Tab.Screen name="Profile" component={PlaceholderScreen} />
+        <Tab.Screen 
+          name="Search" 
+          component={SearchScreen} 
+          // Destruye la pantalla cuando te vas, para que al volver esté limpia
+          options={{ unmountOnBlur: true }} 
+        />
+        <Tab.Screen 
+          name="Gallery" 
+          component={GalleryScreen} 
+          // MUY IMPORTANTE: Esta línea fuerza a la Galería a recargarse cuando recibe nuevos datos
+          options={{ unmountOnBlur: true }} 
+        />
+        <Tab.Screen 
+          name="Profile" 
+          component={PlaceholderScreen} 
+        />
       </Tab.Navigator>
     </NavigationContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background },
-  iconContainer: { paddingHorizontal: 20, paddingVertical: 5, borderRadius: 12 },
-  activeIcon: { backgroundColor: COLORS.surface, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4 }
+  center: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: COLORS.background 
+  },
+  emptyText: {
+    fontSize: 16,
+    color: COLORS.textVariant,
+    marginTop: 10,
+    fontWeight: 'bold',
+  },
+  iconContainer: { 
+    paddingHorizontal: 20, 
+    paddingVertical: 5, 
+    borderRadius: 12 
+  },
+  activeIcon: { 
+    backgroundColor: COLORS.surface, 
+    elevation: 2, 
+    shadowColor: '#000', 
+    shadowOpacity: 0.1, 
+    shadowRadius: 4 
+  }
 });

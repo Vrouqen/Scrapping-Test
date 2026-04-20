@@ -9,6 +9,7 @@ Comandos:
 npm install
 npx playwright install chromium
 npm run dev
+npx localtunnel --port 4000 (para online)
 
 
 Front:

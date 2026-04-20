@@ -16,20 +16,20 @@ export default function SearchScreen({ navigation }) {
     }
 
     setIsLoading(true);
-    try {
-      // ⚠️ CAMBIA ESTO POR TU IP LOCAL (ej. 192.168.1.50)
-      const MI_IP = '192.168.1.50'; 
-      const response = await fetch(`http://${MI_IP}:4000/api/scrape/instagram-posts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.replace('@', '') }),
-      });
+      try {
+        // Llamamos a la variable de entorno y le sumamos la ruta específica
+        const API_URL = process.env.EXPO_PUBLIC_API_URL; 
+        const response = await fetch(`${API_URL}/instagram-posts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username.replace('@', '') }),
+        });
 
       const result = await response.json();
 
       if (response.ok && result.ok) {
-        // Navegamos a la Galería y le pasamos el arreglo de posts
-        navigation.navigate('Gallery', { posts: result.data.recentPosts });
+        // En lugar de alert, navegamos y pasamos el username limpio
+        navigation.navigate('Gallery', { username: username.replace('@', '') });
       } else {
         Alert.alert('Error', result.message || 'No se encontró el perfil.');
       }

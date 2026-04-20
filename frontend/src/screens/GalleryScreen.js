@@ -1,116 +1,232 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, Image, Dimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 
-// Calculamos el tamaño para que queden 3 fotos exactas por fila
-const numColumns = 3;
-const screenWidth = Dimensions.get('window').width;
-const imageSize = screenWidth / numColumns;
+const { width } = Dimensions.get('window');
+
+// ⚠️ Pon tu IP Local aquí
+const MI_IP = '192.168.1.50'; 
 
 export default function GalleryScreen({ route }) {
-  // Recibimos los datos que nos manda SearchScreen (si no hay, usamos un arreglo vacío)
-  const posts = route.params?.posts || [];
+  // Recibimos el username que nos manda la pantalla de búsqueda
+  const username = route.params?.username;
 
-  const renderPost = ({ item }) => (
-    <View style={styles.postContainer}>
-      <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
-      
-      {/* Etiqueta oscura flotante para likes y comentarios */}
-      <View style={styles.overlay}>
-        <View style={styles.statContainer}>
-          <MaterialIcons name="favorite" size={10} color="white" />
-          <Text style={styles.statText}>{item.likes}</Text>
-        </View>
-        <View style={styles.statContainer}>
-          <MaterialIcons name="mode-comment" size={10} color="white" />
-          <Text style={styles.statText}>{item.comments}</Text>
-        </View>
+  const [profileData, setProfileData] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (username) {
+      fetchData();
+    } else {
+      setIsLoading(false);
+    }
+  }, [username]);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+      // 1. Pedimos datos del Perfil
+      const profileResponse = await fetch(`${API_URL}/instagram-profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+      const profileResult = await profileResponse.json();
+
+      // 2. Pedimos las Fotos
+      const postsResponse = await fetch(`${API_URL}/instagram-posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+      const postsResult = await postsResponse.json();
+
+      if (profileResponse.ok && profileResult.ok) {
+        setProfileData(profileResult.data);
+      }
+      if (postsResponse.ok && postsResult.ok) {
+        setPosts(postsResult.data.recentPosts);
+      } else if (postsResult.errorCode === 'PRIVATE_PROFILE' || postsResult.errorCode === 'NO_POSTS_FOUND') {
+        setError(postsResult.message);
+      }
+    } catch (err) {
+      console.log(err);
+      setError('Error de conexión con el servidor.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Pantalla Vacía (si el usuario entra a la pestaña sin buscar nada)
+  if (!username && !isLoading) {
+    return (
+      <View style={styles.center}>
+        <MaterialIcons name="image-search" size={60} color={COLORS.outline} />
+        <Text style={styles.emptyText}>No hay visuales cargados</Text>
+        <Text style={styles.emptySubtext}>Ve a la pestaña Search para buscar un perfil.</Text>
       </View>
-    </View>
-  );
+    );
+  }
+
+  // Pantalla de Carga
+  if (isLoading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={{ marginTop: 10, color: COLORS.textVariant }}>Extrayendo archivo editorial...</Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.headerSpacer} />
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       
-      {posts.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <MaterialIcons name="image-search" size={60} color={COLORS.outline} />
-          <Text style={styles.emptyText}>No hay visuales cargados</Text>
-          <Text style={styles.emptySubtext}>Ve a la pestaña Search para buscar un perfil.</Text>
+      {/* --- SECCIÓN: PERFIL --- */}
+      {profileData && (
+        <View style={styles.profileSection}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>CREATOR PROFILE</Text>
+          </View>
+          
+          <Text style={styles.usernameTitle}>@{username}</Text>
+          <Text style={styles.bioText} numberOfLines={2}>
+            {profileData.profile?.ogDescription || 'Curating visual narratives across the digital landscape.'}
+          </Text>
+
+          <View style={styles.statsContainer}>
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>{profileData.metrics?.followers || '0'}</Text>
+              <Text style={styles.statLabel}>FOLLOWERS</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={[styles.statNumber, { color: COLORS.tertiary }]}>{profileData.metrics?.posts || '0'}</Text>
+              <Text style={styles.statLabel}>POSTS</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* --- SECCIÓN: GALERÍA ASIMÉTRICA --- */}
+      <View style={styles.galleryHeader}>
+        <Text style={styles.galleryTitle}>Recent Posts</Text>
+        <View style={styles.archiveLink}>
+          <Text style={styles.archiveText}>View Archive</Text>
+          <MaterialIcons name="arrow-forward" size={16} color={COLORS.primary} />
+        </View>
+      </View>
+
+      {error ? (
+        <View style={[styles.center, { marginTop: 40 }]}>
+          <MaterialIcons name="lock" size={40} color={COLORS.outline} />
+          <Text style={styles.emptyText}>{error}</Text>
         </View>
       ) : (
-        <FlatList
-          data={posts}
-          keyExtractor={(item) => item.url}
-          numColumns={numColumns}
-          renderItem={renderPost}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-        />
+        <View style={styles.gridContainer}>
+          {posts.map((post, index) => {
+            // Hacemos que la tarjeta del medio (índice 1) baje un poco para la asimetría
+            const isMiddle = index % 3 === 1;
+            
+            return (
+              <View key={post.url || index} style={[styles.postCard, isMiddle && styles.postCardMiddle]}>
+                <Image source={{ uri: post.imageUrl }} style={styles.postImage} />
+                
+                {/* Chip de fecha falso (simulado para el diseño) */}
+                <View style={styles.dateChip}>
+                  <Text style={styles.dateText}>{index === 0 ? 'Today' : `${index + 2}d ago`}</Text>
+                </View>
+
+                {/* Overlay de Interacciones (Siempre visible en móvil por falta de hover) */}
+                <View style={styles.interactionOverlay}>
+                  <View style={styles.interactionItem}>
+                    <MaterialIcons name="favorite" size={14} color="#fff" />
+                    <Text style={styles.interactionText}>{post.likes || '0'}</Text>
+                  </View>
+                  <View style={styles.interactionItem}>
+                    <MaterialIcons name="chat-bubble" size={14} color="#fff" />
+                    <Text style={styles.interactionText}>{post.comments || '0'}</Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
       )}
-    </View>
+
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
+  container: { flex: 1, backgroundColor: COLORS.background },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background, paddingTop: 150 },
+  content: { paddingTop: 120, paddingBottom: 140, paddingHorizontal: 24 },
+  
+  /* Estilos del Perfil */
+  profileSection: { marginBottom: 40 },
+  badge: { alignSelf: 'flex-start', backgroundColor: COLORS.surfaceLow, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 16 },
+  badgeText: { color: COLORS.primary, fontSize: 10, fontWeight: 'bold', letterSpacing: 1.5 },
+  usernameTitle: { fontSize: 38, fontWeight: '900', color: COLORS.text, letterSpacing: -1, marginBottom: 8 },
+  bioText: { fontSize: 16, color: COLORS.textVariant, lineHeight: 24, marginBottom: 24 },
+  statsContainer: { flexDirection: 'row', gap: 40 },
+  statBox: { flexDirection: 'column' },
+  statNumber: { fontSize: 28, fontWeight: 'bold', color: COLORS.text },
+  statLabel: { fontSize: 10, color: COLORS.outline, fontWeight: 'bold', letterSpacing: 1, marginTop: 4 },
+
+  /* Estilos de la Cabecera de Galería */
+  galleryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  galleryTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
+  archiveLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  archiveText: { color: COLORS.primary, fontSize: 12, fontWeight: 'bold' },
+
+  /* Estilos de la Cuadrícula Asimétrica */
+  gridContainer: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    justifyContent: 'space-between',
+    paddingBottom: 20
   },
-  headerSpacer: {
-    height: 110, // Espacio para que el Header translúcido no tape las fotos
+  postCard: { 
+    width: '48%', // ✨ EL TRUCO: Usar porcentaje en lugar de matemáticas
+    aspectRatio: 4/5, 
+    backgroundColor: COLORS.surfaceLow, 
+    borderRadius: 16, 
+    overflow: 'hidden', 
+    marginBottom: 16,
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.05, 
+    shadowRadius: 8, 
+    elevation: 3
   },
-  listContent: {
-    paddingBottom: 120, // Espacio para la barra de navegación inferior
+  postCardMiddle: {
+    marginTop: 24, // Empuja la tarjeta derecha hacia abajo
   },
-  postContainer: {
-    width: imageSize,
-    height: imageSize,
-    padding: 1, // Margen de 1px simulando Instagram
+  postImage: { 
+    width: '100%', 
+    height: '100%',
+    resizeMode: 'cover' // ✨ EL TRUCO 2: Evita que la foto se estire o aplaste
   },
-  postImage: {
-    flex: 1,
-    backgroundColor: COLORS.surfaceLow,
+  
+  /* Chips y Overlays de fotos */
+  dateChip: { position: 'absolute', bottom: 12, left: 12, backgroundColor: 'rgba(255,255,255,0.85)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  dateText: { color: COLORS.text, fontSize: 10, fontWeight: 'bold' },
+  interactionOverlay: { 
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 
+    backgroundColor: 'rgba(12, 14, 16, 0.3)', 
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16,
+    opacity: 1 // En móvil lo dejamos siempre visible porque no hay "hover" del mouse
   },
-  overlay: {
-    position: 'absolute',
-    bottom: 6,
-    left: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    flexDirection: 'row',
-  },
-  statContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 6,
-  },
-  statText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginLeft: 4,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: COLORS.textVariant,
-    textAlign: 'center',
-    marginTop: 8,
-  }
+  interactionItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  interactionText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+
+  /* Textos de error/vacío */
+  emptyText: { fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginTop: 16 },
+  emptySubtext: { fontSize: 14, color: COLORS.textVariant, textAlign: 'center', marginTop: 8 }
 });
