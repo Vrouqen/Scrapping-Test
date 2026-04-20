@@ -28,9 +28,8 @@ export default function SearchScreen({ navigation }) {
       const result = await response.json();
 
       if (response.ok && result.ok) {
-        // Éxito: Aquí navegaremos a la Galería pasándole los datos
-        Alert.alert('¡Éxito!', `Se encontraron ${result.data.postsCount} publicaciones.`);
-        // navigation.navigate('Gallery', { posts: result.data.recentPosts });
+        // Navegamos a la Galería y le pasamos el arreglo de posts
+        navigation.navigate('Gallery', { posts: result.data.recentPosts });
       } else {
         Alert.alert('Error', result.message || 'No se encontró el perfil.');
       }

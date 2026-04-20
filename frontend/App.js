@@ -7,6 +7,7 @@ import { BlurView } from 'expo-blur';
 
 import SearchScreen from './src/screens/SearchScreen';
 import Header from './src/components/Header';
+import GalleryScreen from './src/screens/GalleryScreen';
 import { COLORS } from './src/theme';
 
 const Tab = createBottomTabNavigator();
@@ -60,7 +61,7 @@ export default function App() {
         })}
       >
         <Tab.Screen name="Search" component={SearchScreen} />
-        <Tab.Screen name="Gallery" component={PlaceholderScreen} />
+        <Tab.Screen name="Gallery" component={GalleryScreen} /> 
         <Tab.Screen name="Profile" component={PlaceholderScreen} />
       </Tab.Navigator>
     </NavigationContainer>
