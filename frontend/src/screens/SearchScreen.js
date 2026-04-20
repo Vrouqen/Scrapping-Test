@@ -5,9 +5,55 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../theme';
 import FeatureCard from '../components/FeatureCard';
 
-export default function SearchScreen({ navigation }) {
-  const [username, setUsername] = useState('');
+function extractUsernameFromUrl(urlValue) {
+  const match = String(urlValue).match(/instagram\.com\/([^/?#]+)/i);
+  return match ? match[1] : '';
+}
+
+function buildSearchPayload(inputValue) {
+  const value = String(inputValue || '').trim();
+  const isUrl = /^https?:\/\//i.test(value) || value.includes('instagram.com/');
+
+  if (isUrl) {
+    const normalizedUrl = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+    return {
+      url: normalizedUrl,
+      username: extractUsernameFromUrl(normalizedUrl)
+    };
+  }
+
+  return {
+    username: value.replace(/^@/, '').trim(),
+    url: ''
+  };
+}
+
+function resolveUsername(profileData, fallbackValue) {
+  const canonical = profileData?.profile?.canonicalUrl || '';
+  const fromCanonical = extractUsernameFromUrl(canonical);
+  if (fromCanonical) {
+    return fromCanonical;
+  }
+
+  const fromInputUrl = extractUsernameFromUrl(fallbackValue);
+  if (fromInputUrl) {
+    return fromInputUrl;
+  }
+
+  return String(fallbackValue || '').replace(/^@/, '').trim();
+}
+
+export default function SearchScreen({ navigation, searchState, setSearchState }) {
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
+  const username = searchState?.inputValue || '';
+
+  const onChangeInput = (value) => {
+    setSearchState((prev) => ({
+      ...prev,
+      inputValue: value
+    }));
+  };
 
   const handleSearch = async () => {
     if (!username.trim()) {
@@ -16,26 +62,96 @@ export default function SearchScreen({ navigation }) {
     }
 
     setIsLoading(true);
+    setLoadingMessage('Cargando perfil...');
+
+    navigation.navigate('Search');
+
       try {
-        // Llamamos a la variable de entorno y le sumamos la ruta específica
-        const API_URL = process.env.EXPO_PUBLIC_API_URL; 
-        const response = await fetch(`${API_URL}/instagram-posts`, {
+      const API_URL = process.env.EXPO_PUBLIC_API_URL;
+      const payload = buildSearchPayload(username);
+
+      setSearchState((prev) => ({
+        ...prev,
+        searchedValue: username.trim(),
+        hasSearched: true,
+        isLoading: true,
+        errorType: null,
+        errorMessage: '',
+        profileData: null,
+        posts: [],
+        noPosts: false
+      }));
+
+      const [profileResponse, postsResponse] = await Promise.all([
+        fetch(`${API_URL}/instagram-profile`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: username.replace('@', '') }),
-        });
+          body: JSON.stringify(payload),
+        }),
+        fetch(`${API_URL}/instagram-posts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      ]);
 
-      const result = await response.json();
+      const profileResult = await profileResponse.json();
+      const postsResult = await postsResponse.json();
 
-      if (response.ok && result.ok) {
-        // En lugar de alert, navegamos y pasamos el username limpio
-        navigation.navigate('Gallery', { username: username.replace('@', '') });
-      } else {
-        Alert.alert('Error', result.message || 'No se encontró el perfil.');
+      if (!profileResponse.ok || !profileResult.ok) {
+        const notFoundMessage = profileResult?.message || 'El perfil no existe o no está disponible.';
+        setSearchState((prev) => ({
+          ...prev,
+          isLoading: false,
+          errorType: 'NOT_FOUND',
+          errorMessage: notFoundMessage,
+          profileData: null,
+          posts: [],
+          noPosts: false
+        }));
+        Alert.alert('Perfil no encontrado', notFoundMessage);
+        return;
       }
+
+      const extractedUsername = resolveUsername(profileResult.data, username);
+      let posts = [];
+      let noPosts = false;
+      let warningMessage = '';
+
+      if (postsResponse.ok && postsResult.ok) {
+        posts = postsResult?.data?.recentPosts || [];
+      } else if (postsResult?.errorCode === 'NO_POSTS_FOUND') {
+        noPosts = true;
+        warningMessage = 'El perfil es privado o no tiene publicaciones públicas.';
+        Alert.alert('Aviso', warningMessage);
+      } else {
+        noPosts = true;
+        warningMessage = postsResult?.message || 'No fue posible obtener publicaciones.';
+      }
+
+      setSearchState((prev) => ({
+        ...prev,
+        username: extractedUsername,
+        isLoading: false,
+        profileData: profileResult.data,
+        posts,
+        noPosts,
+        errorType: null,
+        errorMessage: warningMessage
+      }));
     } catch (error) {
+      setSearchState((prev) => ({
+        ...prev,
+        isLoading: false,
+        errorType: 'NETWORK',
+        errorMessage: 'No se pudo conectar con el servidor.',
+        profileData: null,
+        posts: [],
+        noPosts: false
+      }));
       Alert.alert('Error de red', 'No se pudo conectar con el servidor.');
     } finally {
+      setLoadingMessage('');
       setIsLoading(false);
     }
   };
@@ -67,7 +183,7 @@ export default function SearchScreen({ navigation }) {
             placeholder="e.g. @creativedirector"
             placeholderTextColor={COLORS.outline}
             value={username}
-            onChangeText={setUsername}
+            onChangeText={onChangeInput}
             autoCapitalize="none"
             editable={!isLoading}
           />
@@ -85,6 +201,9 @@ export default function SearchScreen({ navigation }) {
             )}
           </LinearGradient>
         </TouchableOpacity>
+        {isLoading ? (
+          <Text style={styles.loadingText}>{loadingMessage || 'Cargando...'}</Text>
+        ) : null}
       </View>
 
       {/* Bento-lite */}
@@ -121,5 +240,6 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 16, color: COLORS.text, fontWeight: '600' },
   button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 60, borderRadius: 16, gap: 8 },
   buttonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  loadingText: { marginTop: 12, fontSize: 14, color: COLORS.textVariant, textAlign: 'center', fontWeight: '600' },
   bentoGrid: { flexDirection: 'column', gap: 10 }
 });

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -7,6 +7,7 @@ import { BlurView } from 'expo-blur';
 
 import SearchScreen from './src/screens/SearchScreen';
 import Header from './src/components/Header';
+import ProfileScreen from './src/screens/ProfileScreen';
 import GalleryScreen from './src/screens/GalleryScreen';
 import { COLORS } from './src/theme';
 
@@ -21,6 +22,19 @@ const PlaceholderScreen = () => (
 );
 
 export default function App() {
+  const [searchState, setSearchState] = useState({
+    inputValue: '',
+    searchedValue: '',
+    username: '',
+    hasSearched: false,
+    isLoading: false,
+    profileData: null,
+    posts: [],
+    noPosts: false,
+    errorType: null,
+    errorMessage: ''
+  });
+
   return (
     <NavigationContainer>
       <Header />
@@ -67,22 +81,31 @@ export default function App() {
           },
         })}
       >
-        <Tab.Screen 
-          name="Search" 
-          component={SearchScreen} 
-          // Destruye la pantalla cuando te vas, para que al volver esté limpia
-          options={{ unmountOnBlur: true }} 
-        />
-        <Tab.Screen 
-          name="Gallery" 
-          component={GalleryScreen} 
-          // MUY IMPORTANTE: Esta línea fuerza a la Galería a recargarse cuando recibe nuevos datos
-          options={{ unmountOnBlur: true }} 
-        />
-        <Tab.Screen 
-          name="Profile" 
-          component={PlaceholderScreen} 
-        />
+        <Tab.Screen name="Search">
+          {(props) => (
+            <SearchScreen
+              {...props}
+              searchState={searchState}
+              setSearchState={setSearchState}
+            />
+          )}
+        </Tab.Screen>
+        <Tab.Screen name="Gallery">
+          {(props) => (
+            <GalleryScreen
+              {...props}
+              searchState={searchState}
+            />
+          )}
+        </Tab.Screen>
+        <Tab.Screen name="Profile">
+          {(props) => (
+            <ProfileScreen
+              {...props}
+              searchState={searchState}
+            />
+          )}
+        </Tab.Screen>
       </Tab.Navigator>
     </NavigationContainer>
   );

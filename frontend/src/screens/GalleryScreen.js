@@ -1,71 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 
-const { width } = Dimensions.get('window');
-
-// ⚠️ Pon tu IP Local aquí
-const MI_IP = '192.168.1.50'; 
-
-export default function GalleryScreen({ route }) {
-  // Recibimos el username que nos manda la pantalla de búsqueda
-  const username = route.params?.username;
-
-  const [profileData, setProfileData] = useState(null);
-  const [posts, setPosts] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    if (username) {
-      fetchData();
-    } else {
-      setIsLoading(false);
-    }
-  }, [username]);
-
-  const fetchData = async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const API_URL = process.env.EXPO_PUBLIC_API_URL;
-
-      // 1. Pedimos datos del Perfil
-      const profileResponse = await fetch(`${API_URL}/instagram-profile`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
-      });
-      const profileResult = await profileResponse.json();
-
-      // 2. Pedimos las Fotos
-      const postsResponse = await fetch(`${API_URL}/instagram-posts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
-      });
-      const postsResult = await postsResponse.json();
-
-      if (profileResponse.ok && profileResult.ok) {
-        setProfileData(profileResult.data);
-      }
-      if (postsResponse.ok && postsResult.ok) {
-        setPosts(postsResult.data.recentPosts);
-      } else if (postsResult.errorCode === 'PRIVATE_PROFILE' || postsResult.errorCode === 'NO_POSTS_FOUND') {
-        setError(postsResult.message);
-      }
-    } catch (err) {
-      console.log(err);
-      setError('Error de conexión con el servidor.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+export default function GalleryScreen({ searchState }) {
+  const {
+    hasSearched,
+    isLoading,
+    username,
+    profileData,
+    posts,
+    noPosts,
+    errorType,
+    errorMessage
+  } = searchState;
 
   // Pantalla Vacía (si el usuario entra a la pestaña sin buscar nada)
-  if (!username && !isLoading) {
+  if (!hasSearched && !isLoading) {
     return (
       <View style={styles.center}>
         <MaterialIcons name="image-search" size={60} color={COLORS.outline} />
@@ -75,12 +26,22 @@ export default function GalleryScreen({ route }) {
     );
   }
 
+  if (errorType === 'NOT_FOUND') {
+    return (
+      <View style={styles.center}>
+        <MaterialIcons name="error-outline" size={60} color={COLORS.outline} />
+        <Text style={styles.emptyText}>El perfil no existe</Text>
+        <Text style={styles.emptySubtext}>{errorMessage || 'Verifica el usuario o la URL e intenta de nuevo.'}</Text>
+      </View>
+    );
+  }
+
   // Pantalla de Carga
   if (isLoading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={{ marginTop: 10, color: COLORS.textVariant }}>Extrayendo archivo editorial...</Text>
+        <Text style={{ marginTop: 10, color: COLORS.textVariant }}>Cargando...</Text>
       </View>
     );
   }
@@ -122,10 +83,16 @@ export default function GalleryScreen({ route }) {
         </View>
       </View>
 
-      {error ? (
+      {errorType === 'NETWORK' ? (
         <View style={[styles.center, { marginTop: 40 }]}>
-          <MaterialIcons name="lock" size={40} color={COLORS.outline} />
-          <Text style={styles.emptyText}>{error}</Text>
+          <MaterialIcons name="cloud-off" size={40} color={COLORS.outline} />
+          <Text style={styles.emptyText}>{errorMessage || 'Error de conexión con el servidor.'}</Text>
+        </View>
+      ) : noPosts || !posts.length ? (
+        <View style={[styles.center, { marginTop: 40 }]}> 
+          <MaterialIcons name="collections-bookmark" size={40} color={COLORS.outline} />
+          <Text style={styles.emptyText}>No hay publicaciones</Text>
+          <Text style={styles.emptySubtext}>Este perfil no tiene publicaciones públicas para mostrar.</Text>
         </View>
       ) : (
         <View style={styles.gridContainer}>
