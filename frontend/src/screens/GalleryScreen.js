@@ -3,6 +3,39 @@ import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator } from 're
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../theme';
 
+function formatPublishedDate(publishedAt) {
+  if (!publishedAt) {
+    return 'Sin fecha';
+  }
+
+  const date = new Date(publishedAt);
+  if (Number.isNaN(date.getTime())) {
+    return 'Sin fecha';
+  }
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 0) {
+    return 'Hoy';
+  }
+
+  if (diffDays === 1) {
+    return 'Ayer';
+  }
+
+  if (diffDays < 7) {
+    return `Hace ${diffDays} dias`;
+  }
+
+  return date.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+}
+
 export default function GalleryScreen({ searchState }) {
   const {
     hasSearched,
@@ -112,7 +145,7 @@ export default function GalleryScreen({ searchState }) {
                 
                 {/* Chip de fecha falso (simulado para el diseño) */}
                 <View style={styles.dateChip}>
-                  <Text style={styles.dateText}>{index === 0 ? 'Today' : `${index + 2}d ago`}</Text>
+                  <Text style={styles.dateText}>{formatPublishedDate(post.publishedAt)}</Text>
                 </View>
 
                 {/* Overlay de Interacciones (Siempre visible en móvil por falta de hover) */}

@@ -236,10 +236,34 @@ async function scrapeInstagramPosts({ username, url }) {
         
         const postData = await postPage.evaluate(() => {
           const getMeta = (prop) => document.querySelector(`meta[property="${prop}"]`)?.getAttribute('content') || '';
+          const getNamedMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') || '';
+          const timeTag = document.querySelector('time[datetime]')?.getAttribute('datetime') || '';
+          const articlePublished = getMeta('article:published_time');
+          const ogUpdated = getMeta('og:updated_time');
+          const jsonLdDate = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
+            .map((node) => node.textContent || '')
+            .map((text) => {
+              try {
+                const parsed = JSON.parse(text);
+                if (Array.isArray(parsed)) {
+                  const candidate = parsed.find((item) => item?.datePublished);
+                  return candidate?.datePublished || '';
+                }
+
+                return parsed?.datePublished || '';
+              } catch (_error) {
+                return '';
+              }
+            })
+            .find(Boolean) || '';
+
+          const publishedAt = timeTag || articlePublished || jsonLdDate || ogUpdated || getNamedMeta('date') || '';
+
           return {
             url: document.location.href,
             image: getMeta('og:image'),
-            description: getMeta('og:description') 
+            description: getMeta('og:description'),
+            publishedAt
           };
         });
 
@@ -251,7 +275,8 @@ async function scrapeInstagramPosts({ username, url }) {
           imageUrl: postData.image,
           likes: likesMatch ? likesMatch[1] : "0",
           comments: commentsMatch ? commentsMatch[1] : "0",
-          caption: postData.description
+          caption: postData.description,
+          publishedAt: postData.publishedAt || null
         });
         
       } catch (postError) {
