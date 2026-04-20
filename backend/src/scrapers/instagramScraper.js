@@ -38,6 +38,53 @@ function parseOgDescription(ogDescription) {
   };
 }
 
+function parsePositiveIntEnv(name, fallbackValue) {
+  const raw = process.env[name];
+  if (!raw) {
+    return fallbackValue;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallbackValue;
+}
+
+async function collectPostLinks(page, maxPosts, maxScrolls) {
+  const links = new Set();
+  let stagnantRounds = 0;
+
+  for (let i = 0; i < maxScrolls && links.size < maxPosts && stagnantRounds < 3; i += 1) {
+    const currentLinks = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]'))
+        .map((anchor) => anchor.getAttribute('href'))
+        .filter(Boolean)
+        .map((href) => href.startsWith('http') ? href : `https://www.instagram.com${href}`);
+    });
+
+    const before = links.size;
+    for (const link of currentLinks) {
+      if (links.size >= maxPosts) {
+        break;
+      }
+      links.add(link);
+    }
+
+    if (links.size === before) {
+      stagnantRounds += 1;
+    } else {
+      stagnantRounds = 0;
+    }
+
+    if (links.size >= maxPosts) {
+      break;
+    }
+
+    await page.mouse.wheel(0, 2500);
+    await page.waitForTimeout(900);
+  }
+
+  return Array.from(links);
+}
+
 // ==========================================
 // FUNCIÓN 1: EXTRAER SOLO DATOS DEL PERFIL
 // ==========================================
@@ -134,6 +181,8 @@ async function scrapeInstagramPosts({ username, url }) {
   const profileUrl = buildProfileUrl({ username, url });
   const headless = String(process.env.HEADLESS || 'true').toLowerCase() !== 'false';
   const sessionId = process.env.INSTAGRAM_SESSIONID;
+  const maxPosts = parsePositiveIntEnv('MAX_POSTS_TO_SCRAPE', 5000);
+  const maxScrolls = parsePositiveIntEnv('MAX_POSTS_SCROLL_ROUNDS', 200);
 
   const browser = await chromium.launch({ headless });
 
@@ -170,13 +219,7 @@ async function scrapeInstagramPosts({ username, url }) {
       throw new Error('NO_POSTS_FOUND');
     }
 
-    const postLinks = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]'))
-        .map((anchor) => anchor.getAttribute('href'))
-        .filter(Boolean)
-        .slice(0, 3) // Solo 3 para que no de timeout
-        .map((href) => href.startsWith('http') ? href : `https://www.instagram.com${href}`);
-    });
+    const postLinks = await collectPostLinks(page, maxPosts, maxScrolls);
 
     if (!postLinks || postLinks.length === 0) {
       throw new Error('NO_POSTS_FOUND');

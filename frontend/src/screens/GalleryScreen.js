@@ -88,6 +88,12 @@ export default function GalleryScreen({ searchState }) {
           <MaterialIcons name="cloud-off" size={40} color={COLORS.outline} />
           <Text style={styles.emptyText}>{errorMessage || 'Error de conexión con el servidor.'}</Text>
         </View>
+      ) : errorType === 'PRIVATE_PROFILE' ? (
+        <View style={[styles.center, { marginTop: 40 }]}> 
+          <MaterialIcons name="lock" size={40} color={COLORS.outline} />
+          <Text style={styles.emptyText}>Perfil privado</Text>
+          <Text style={styles.emptySubtext}>No se pueden mostrar publicaciones de este perfil.</Text>
+        </View>
       ) : noPosts || !posts.length ? (
         <View style={[styles.center, { marginTop: 40 }]}> 
           <MaterialIcons name="collections-bookmark" size={40} color={COLORS.outline} />

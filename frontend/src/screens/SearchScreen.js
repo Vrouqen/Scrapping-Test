@@ -43,6 +43,15 @@ function resolveUsername(profileData, fallbackValue) {
   return String(fallbackValue || '').replace(/^@/, '').trim();
 }
 
+function parseMetricNumber(value) {
+  const onlyDigits = String(value || '').replace(/[^\d]/g, '');
+  if (!onlyDigits) {
+    return 0;
+  }
+
+  return Number.parseInt(onlyDigits, 10);
+}
+
 export default function SearchScreen({ navigation, searchState, setSearchState }) {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -117,12 +126,21 @@ export default function SearchScreen({ navigation, searchState, setSearchState }
       let posts = [];
       let noPosts = false;
       let warningMessage = '';
+      let nextErrorType = null;
 
       if (postsResponse.ok && postsResult.ok) {
         posts = postsResult?.data?.recentPosts || [];
       } else if (postsResult?.errorCode === 'NO_POSTS_FOUND') {
         noPosts = true;
-        warningMessage = 'El perfil es privado o no tiene publicaciones públicas.';
+        const totalPosts = parseMetricNumber(profileResult?.data?.metrics?.posts);
+
+        if (totalPosts > 0) {
+          nextErrorType = 'PRIVATE_PROFILE';
+          warningMessage = 'El perfil es privado.';
+        } else {
+          warningMessage = 'No hay publicaciones públicas para mostrar.';
+        }
+
         Alert.alert('Aviso', warningMessage);
       } else {
         noPosts = true;
@@ -136,9 +154,11 @@ export default function SearchScreen({ navigation, searchState, setSearchState }
         profileData: profileResult.data,
         posts,
         noPosts,
-        errorType: null,
+        errorType: nextErrorType,
         errorMessage: warningMessage
       }));
+
+      navigation.navigate('Profile');
     } catch (error) {
       setSearchState((prev) => ({
         ...prev,
