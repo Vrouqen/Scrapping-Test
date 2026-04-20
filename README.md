@@ -18,3 +18,4 @@ Comandos:
 npx create-expo-app frontend --template blank
 npm install @react-navigation/native @react-navigation/bottom-tabs
 npx expo install react-native-screens react-native-safe-area-context expo-blur expo-linear-gradient @expo/vector-icons
+npx expo install react-dom react-native-web

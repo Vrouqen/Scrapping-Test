@@ -50,16 +50,16 @@ export default function SearchScreen({ navigation }) {
         <View style={styles.iconWrapper}>
           <MaterialIcons name="auto-awesome" size={36} color={COLORS.primary} />
         </View>
-        <Text style={styles.title}>Digital Archive.</Text>
-        <Text style={[styles.title, { color: COLORS.primary }]}>Curated Insights.</Text>
+        <Text style={styles.title}>Archivo Digital.</Text>
+        <Text style={[styles.title, { color: COLORS.primary }]}>Informes acertados.</Text>
         <Text style={styles.subtitle}>
-          Transform raw social data into editorial-grade visual intelligence. Enter any public profile to begin the curation.
+          Convierte datos de redes sociales sin procesar. Introduce cualquier perfil público para comenzar la selección.
         </Text>
       </View>
 
       {/* Search Input Block */}
       <View style={styles.searchCard}>
-        <Text style={styles.label}>USERNAME OR PROFILE URL</Text>
+        <Text style={styles.label}>NOMBRE DE USUARIO O URL DEL PERFIL</Text>
         <View style={styles.inputContainer}>
           <MaterialIcons name="alternate-email" size={20} color={COLORS.outline} style={styles.inputIcon} />
           <TextInput 
@@ -79,7 +79,7 @@ export default function SearchScreen({ navigation }) {
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Text style={styles.buttonText}>Search Archive</Text>
+                <Text style={styles.buttonText}>Buscar Perfil</Text>
                 <MaterialIcons name="arrow-forward" size={20} color="#fff" />
               </>
             )}
@@ -91,14 +91,14 @@ export default function SearchScreen({ navigation }) {
       <View style={styles.bentoGrid}>
         <FeatureCard 
           icon="hub" 
-          title="Deep Scraping" 
-          description="Our engine crawls public nodes to fetch high-resolution media and engagement metadata instantly."
+          title="Scraping Profundo" 
+          description="Nuestro motor rastrea nodos públicos para obtener medios de alta resolución y metadatos de engagement instantáneamente."
           iconColor={COLORS.tertiary}
         />
         <FeatureCard 
           icon="analytics" 
-          title="Editorial Analytics" 
-          description="Beyond numbers: we calculate aesthetic trends and content resonance using custom ML models."
+          title="Análisis editorial" 
+          description="Más allá de las cifras: analizamos las tendencias estéticas y la repercusión de los contenidos."
           iconColor={COLORS.secondary}
         />
       </View>
