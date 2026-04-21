@@ -78,6 +78,27 @@ function toSafeNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function parseEngagementNumber(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) {
+    return 0;
+  }
+
+  const compactMatch = normalized.match(/^([\d.,]+)\s*([km])$/i);
+  if (compactMatch) {
+    const base = Number.parseFloat(compactMatch[1].replace(/,/g, '.'));
+    const multiplier = compactMatch[2] === 'm' ? 1000000 : 1000;
+    return Number.isFinite(base) ? Math.round(base * multiplier) : 0;
+  }
+
+  const digitsOnly = normalized.replace(/[^\d]/g, '');
+  if (!digitsOnly) {
+    return 0;
+  }
+
+  return Number.parseInt(digitsOnly, 10);
+}
+
 function escapeRegExp(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -248,11 +269,14 @@ async function scrapeInstagramPosts({ username, url }) {
         const likesMatch = postData.description.match(/([\d.,]+)\s+(likes|Me gusta)/i);
         const commentsMatch = postData.description.match(/([\d.,]+)\s+(comments|comentarios)/i);
 
+        const parsedLikes = parseEngagementNumber(likesMatch ? likesMatch[1] : '0');
+        const parsedComments = parseEngagementNumber(commentsMatch ? commentsMatch[1] : '0');
+
         detailedPosts.push({
           url: postData.url,
           imageUrl: postData.image,
-          likes: likesMatch ? likesMatch[1] : "0",
-          comments: commentsMatch ? commentsMatch[1] : "0",
+          likes: parsedLikes,
+          comments: parsedComments,
           caption: postData.description,
           publishedAt: postData.publishedAt || null
         });
@@ -267,7 +291,8 @@ async function scrapeInstagramPosts({ username, url }) {
     return {
       requestedUrl: profileUrl,
       postsCount: detailedPosts.length,
-      recentPosts: detailedPosts.slice(0, MAX_PUBLICATIONS)
+      recentPosts: detailedPosts.slice(0, MAX_PUBLICATIONS),
+      stats: calculateStats(detailedPosts)
     };
   } finally {
     await browser.close();
@@ -456,6 +481,7 @@ function calculateStats(posts) {
     postWithMostLikes: {
       url: postWithMostLikes.url,
       likes: toSafeNumber(postWithMostLikes.likes),
+      comments: toSafeNumber(postWithMostLikes.comments),
       publishedAt: postWithMostLikes.publishedAt
     },
     postWithMostComments: {

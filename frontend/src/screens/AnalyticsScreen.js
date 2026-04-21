@@ -1,22 +1,65 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { COLORS } from '../theme';
 
-export default function AnalyticsScreen({ navigation, searchState }) {
+export default function AnalyticsScreen({ navigation, searchState, setSearchState }) {
+  // Estado local para manejar el loading exclusivo del análisis profundo
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
   const {
     hasSearched,
     isLoading,
     username,
+    searchedValue,
     profileData,
     errorType,
     errorMessage,
-    stats // Asumiendo que guardas el resultado del nuevo endpoint aquí
+    stats
   } = searchState || {};
 
   // ==========================================
-  // ESTADOS DE CARGA Y ERROR
+  // FUNCIÓN PARA LLAMAR AL ENDPOINT 3
+  // ==========================================
+  const handleAnalyze = async () => {
+    const targetUser = username || searchedValue;
+    if (!targetUser) return;
+
+    setIsAnalyzing(true);
+
+    try {
+      const API_URL = process.env.EXPO_PUBLIC_API_URL;
+      
+      const response = await fetch(`${API_URL}/instagram-stats`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: targetUser }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        Alert.alert('Aviso', result.message || 'No se pudieron obtener las estadísticas históricas.');
+        return;
+      }
+
+      // Actualizamos el estado global inyectando las estadísticas recibidas
+      setSearchState(prev => ({
+        ...prev,
+        stats: result.data.stats
+      }));
+
+    } catch (error) {
+      Alert.alert('Error de red', 'No se pudo conectar con el servidor para el análisis.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // ==========================================
+  // ESTADOS DE CARGA Y ERROR GLOBALES (De la búsqueda principal)
   // ==========================================
   if (!hasSearched && !isLoading) {
     return (
@@ -32,7 +75,7 @@ export default function AnalyticsScreen({ navigation, searchState }) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={{ marginTop: 10, color: COLORS.textVariant }}>Analizando métricas...</Text>
+        <Text style={{ marginTop: 10, color: COLORS.textVariant }}>Cargando perfil...</Text>
       </View>
     );
   }
@@ -47,6 +90,44 @@ export default function AnalyticsScreen({ navigation, searchState }) {
     );
   }
 
+  // ==========================================
+  // VISTA INTERMEDIA: PERFIL ENCONTRADO, PERO SIN ANALIZAR
+  // ==========================================
+  if (hasSearched && !stats) {
+    return (
+      <View style={styles.center}>
+        <View style={styles.preAnalyzeIconWrapper}>
+          <MaterialIcons name="insights" size={48} color={COLORS.primary} />
+        </View>
+        <Text style={styles.emptyText}>Análisis Histórico</Text>
+        <Text style={styles.emptySubtext}>Genera un reporte avanzado de los últimos 3 años de @{username}</Text>
+        
+        <TouchableOpacity activeOpacity={0.8} onPress={handleAnalyze} disabled={isAnalyzing} style={{ marginTop: 32 }}>
+          <LinearGradient colors={[COLORS.primary, COLORS.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.analyzeBtn}>
+            {isAnalyzing ? (
+              <>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={styles.analyzeBtnText}>Analizando posts...</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.analyzeBtnText}>Generar Reporte</Text>
+                <MaterialIcons name="auto-awesome" size={20} color="#fff" />
+              </>
+            )}
+          </LinearGradient>
+        </TouchableOpacity>
+        
+        {isAnalyzing && (
+          <Text style={styles.disclaimerText}>Esto puede tomar hasta 1 minuto dependiendo de la cantidad de publicaciones.</Text>
+        )}
+      </View>
+    );
+  }
+
+  // ==========================================
+  // VISTA DEL DASHBOARD (Una vez que 'stats' existe)
+  // ==========================================
   const totalPosts = stats?.totalPosts ?? 0;
   const totalLikes = stats?.totalLikes ?? 0;
   const totalComments = stats?.totalComments ?? 0;
@@ -55,6 +136,17 @@ export default function AnalyticsScreen({ navigation, searchState }) {
 
   const bestPostLikes = stats?.postWithMostLikes ?? { likes: 0, comments: 0, url: '' };
   const bestPostComments = stats?.postWithMostComments ?? { comments: 0, url: '' };
+  
+  const monthlyStats = stats?.monthlyStats || {};
+  const timelineRows = Object.entries(monthlyStats)
+    .map(([month, data]) => ({ month, ...data }))
+    .sort((a, b) => b.month.localeCompare(a.month))
+    .slice(0, 3);
+    
+  const maxLikesInTimeline = timelineRows.reduce((max, item) => Math.max(max, Number(item.totalLikes) || 0), 0);
+  const trendPercent = timelineRows.length >= 2 && (Number(timelineRows.totalLikes) || 0) > 0
+    ? Math.round((((Number(timelineRows.totalLikes) || 0) - (Number(timelineRows.totalLikes) || 0)) / (Number(timelineRows.totalLikes) || 1)) * 100)
+    : 0;
 
   return (
     <View style={styles.mainContainer}>
@@ -63,7 +155,6 @@ export default function AnalyticsScreen({ navigation, searchState }) {
         {/* --- 1. HERO SECTION --- */}
         <View style={styles.heroSection}>
           <Text style={styles.heroLabel}>SCRAPER REPORT</Text>
-          
           <View style={styles.heroRow}>
             <View style={styles.profileInfo}>
               <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.avatarGradient}>
@@ -77,7 +168,6 @@ export default function AnalyticsScreen({ navigation, searchState }) {
                 <Text style={styles.bioText}>Digital Creator & Visionary</Text>
               </View>
             </View>
-
             <View style={styles.totalCard}>
               <Text style={styles.totalCardLabel}>TOTAL POSTS</Text>
               <Text style={styles.totalCardNumber}>{totalPosts}</Text>
@@ -87,14 +177,13 @@ export default function AnalyticsScreen({ navigation, searchState }) {
 
         {/* --- 2. BENTO GRID: MAIN METRICS --- */}
         <View style={styles.bentoGrid}>
-          
           {/* Global Likes */}
           <View style={[styles.bentoCard, styles.cardCol2, { borderLeftWidth: 4, borderLeftColor: COLORS.primary }]}>
             <MaterialIcons name="favorite" size={24} color={COLORS.primary} style={styles.cardIcon} />
             <Text style={styles.cardLabel}>CUMULATIVE ENGAGEMENT</Text>
             <View style={styles.rowBaseline}>
               <Text style={styles.cardNumberLarge}>{totalLikes.toLocaleString()}</Text>
-              <Text style={styles.cardTrend}>+12% vs last month</Text>
+              <Text style={styles.cardTrend}>{trendPercent >= 0 ? `+${trendPercent}%` : `${trendPercent}%`} vs last month</Text>
             </View>
           </View>
 
@@ -160,70 +249,62 @@ export default function AnalyticsScreen({ navigation, searchState }) {
               </View>
             </View>
           </View>
-
         </View>
 
         {/* --- 3. TIMELINE & DISCUSSIONS --- */}
         <View style={styles.bottomSection}>
           <Text style={styles.sectionTitle}>Timeline Analysis</Text>
-          <Text style={styles.sectionSubtitle}>2026 Archive</Text>
+          <Text style={styles.sectionSubtitle}>Últimos meses analizados</Text>
 
           <View style={styles.timelineCard}>
-            {/* March */}
-            <View style={styles.timelineRow}>
-              <Text style={styles.timelineMonth}>2026-03</Text>
-              <View style={styles.timelineBarContainer}>
-                <LinearGradient colors={[COLORS.primary, COLORS.secondary]} start={{x:0, y:0}} end={{x:1, y:0}} style={[styles.timelineBar, { width: '85%' }]} />
-              </View>
-              <View style={styles.timelineData}>
-                <Text style={styles.timelinePosts}>18 Posts</Text>
-                <Text style={styles.timelineValuePrimary}>1,240 <MaterialIcons name="arrow-upward" size={10} /></Text>
-              </View>
-            </View>
-            {/* February */}
-            <View style={styles.timelineRow}>
-              <Text style={styles.timelineMonth}>2026-02</Text>
-              <View style={styles.timelineBarContainer}>
-                <View style={[styles.timelineBar, { width: '100%', backgroundColor: COLORS.surfaceLow }]} />
-              </View>
-              <View style={styles.timelineData}>
-                <Text style={styles.timelinePosts}>22 Posts</Text>
-                <Text style={styles.timelineValue}>1,502</Text>
-              </View>
-            </View>
-            {/* January */}
-            <View style={styles.timelineRow}>
-              <Text style={styles.timelineMonth}>2026-01</Text>
-              <View style={styles.timelineBarContainer}>
-                <View style={[styles.timelineBar, { width: '58%', backgroundColor: COLORS.surfaceLow }]} />
-              </View>
-              <View style={styles.timelineData}>
-                <Text style={styles.timelinePosts}>13 Posts</Text>
-                <Text style={styles.timelineValue}>1,044</Text>
-              </View>
-            </View>
+            {timelineRows.length === 0 ? (
+              <Text style={styles.timelineValue}>Sin datos mensuales disponibles</Text>
+            ) : (
+              timelineRows.map((row, index) => {
+                const rowLikes = Number(row.totalLikes) || 0;
+                const width = maxLikesInTimeline > 0 ? `${Math.max(20, Math.round((rowLikes / maxLikesInTimeline) * 100))}%` : '20%';
+                const isFirst = index === 0;
+
+                return (
+                  <View style={styles.timelineRow} key={row.month}>
+                    <Text style={styles.timelineMonth}>{row.month}</Text>
+                    <View style={styles.timelineBarContainer}>
+                      {isFirst ? (
+                        <LinearGradient colors={[COLORS.primary, COLORS.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.timelineBar, { width }]} />
+                      ) : (
+                        <View style={[styles.timelineBar, { width, backgroundColor: COLORS.surfaceLow }]} />
+                      )}
+                    </View>
+                    <View style={styles.timelineData}>
+                      <Text style={styles.timelinePosts}>{row.postCount} Posts</Text>
+                      <Text style={isFirst ? styles.timelineValuePrimary : styles.timelineValue}>{rowLikes.toLocaleString()}</Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
           </View>
 
           {/* Most Discussed Card */}
-          <View style={styles.discussedCard}>
-            <MaterialIcons name="forum" size={32} color={COLORS.secondary} style={{ marginBottom: 12 }} />
-            <Text style={styles.discussedTitle}>Most Discussed</Text>
-            <Text style={styles.discussedDesc}>Your audience showed peak curiosity on your recent collaboration announcement.</Text>
-            
-            <View style={styles.discussedHighlight}>
-              <View style={styles.rowSpaceBetween}>
-                <Text style={styles.discussedHighlightLabel}>PEAK ENGAGEMENT</Text>
-                <Text style={styles.discussedHighlightNumber}>{bestPostComments.comments}</Text>
+          {bestPostComments.url ? (
+            <View style={styles.discussedCard}>
+              <MaterialIcons name="forum" size={32} color={COLORS.secondary} style={{ marginBottom: 12 }} />
+              <Text style={styles.discussedTitle}>Most Discussed</Text>
+              <Text style={styles.discussedDesc}>El contenido que generó mayor conversación.</Text>
+              
+              <View style={styles.discussedHighlight}>
+                <View style={styles.rowSpaceBetween}>
+                  <Text style={styles.discussedHighlightLabel}>PEAK ENGAGEMENT</Text>
+                  <Text style={styles.discussedHighlightNumber}>{bestPostComments.comments}</Text>
+                </View>
+                <Text style={styles.discussedHighlightSub}>Comentarios en este post</Text>
               </View>
-              <Text style={styles.discussedHighlightSub}>Comments on this post</Text>
+
+              <Image source={{ uri: bestPostComments.url }} style={styles.discussedImage} />
             </View>
-
-            <Image source={{ uri: bestPostComments.url }} style={styles.discussedImage} />
-          </View>
+          ) : null}
         </View>
-
       </ScrollView>
-
     </View>
   );
 }
@@ -234,8 +315,14 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background, paddingHorizontal: 24 },
   content: { paddingTop: 100, paddingBottom: 120, paddingHorizontal: 24 },
   
-  emptyText: { fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginTop: 16 },
-  emptySubtext: { fontSize: 14, color: COLORS.textVariant, textAlign: 'center', marginTop: 8 },
+  emptyText: { fontSize: 22, fontWeight: '900', color: COLORS.text, marginTop: 16, letterSpacing: -0.5 },
+  emptySubtext: { fontSize: 14, color: COLORS.textVariant, textAlign: 'center', marginTop: 8, paddingHorizontal: 20 },
+  
+  /* Botón de análisis */
+  preAnalyzeIconWrapper: { width: 90, height: 90, borderRadius: 30, backgroundColor: `${COLORS.primary}15`, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  analyzeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 16, borderRadius: 16, gap: 10, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 5 },
+  analyzeBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  disclaimerText: { marginTop: 16, fontSize: 12, color: COLORS.outline, textAlign: 'center', paddingHorizontal: 30 },
 
   /* Hero Section */
   heroSection: { marginBottom: 32 },
@@ -269,7 +356,7 @@ const styles = StyleSheet.create({
 
   /* Peak Performance */
   peakContent: { flexDirection: 'row', alignItems: 'center' },
-  peakImage: { width: 80, height: 80, borderRadius: 12, marginRight: 16 },
+  peakImage: { width: 80, height: 80, borderRadius: 12, marginRight: 16, backgroundColor: COLORS.surfaceLow },
   peakTextContainer: { flex: 1 },
   peakChip: { alignSelf: 'flex-start', backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginBottom: 8 },
   peakChipText: { color: '#fff', fontSize: 9, fontWeight: 'bold', letterSpacing: 1 },
@@ -302,5 +389,4 @@ const styles = StyleSheet.create({
   discussedHighlightNumber: { fontSize: 20, fontWeight: '900', color: COLORS.secondary },
   discussedHighlightSub: { fontSize: 12, color: COLORS.textVariant },
   discussedImage: { width: '100%', height: 160, borderRadius: 12, backgroundColor: COLORS.surfaceLow },
-
 });

@@ -92,7 +92,7 @@ export default function SearchScreen({ navigation, searchState, setSearchState }
         noPosts: false
       }));
 
-      const [profileResponse, postsResponse, statsResponse] = await Promise.all([
+      const [profileResponse, postsResponse] = await Promise.all([
         fetch(`${API_URL}/instagram-profile`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -102,17 +102,11 @@ export default function SearchScreen({ navigation, searchState, setSearchState }
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
-        }),
-        fetch(`${API_URL}/instagram-stats`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
         })
       ]);
 
       const profileResult = await profileResponse.json();
       const postsResult = await postsResponse.json();
-      const statsResult = await statsResponse.json();
 
       if (!profileResponse.ok || !profileResult.ok) {
         const notFoundMessage = profileResult?.message || 'El perfil no existe o no está disponible.';
@@ -131,12 +125,14 @@ export default function SearchScreen({ navigation, searchState, setSearchState }
 
       const extractedUsername = resolveUsername(profileResult.data, username);
       let posts = [];
+      let stats = null;
       let noPosts = false;
       let warningMessage = '';
       let nextErrorType = null;
 
       if (postsResponse.ok && postsResult.ok) {
         posts = postsResult?.data?.recentPosts || [];
+        // Eliminamos la asignación de stats de aquí para que se mantenga null
       } else if (postsResult?.errorCode === 'NO_POSTS_FOUND') {
         noPosts = true;
         const totalPosts = parseMetricNumber(profileResult?.data?.metrics?.posts);
@@ -153,8 +149,6 @@ export default function SearchScreen({ navigation, searchState, setSearchState }
         noPosts = true;
         warningMessage = postsResult?.message || 'No fue posible obtener publicaciones.';
       }
-
-      const stats = statsResponse.ok && statsResult?.ok ? statsResult?.data?.stats || null : null;
 
       setSearchState((prev) => ({
         ...prev,
