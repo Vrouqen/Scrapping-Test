@@ -73,6 +73,11 @@ function parsePositiveIntEnv(name, fallbackValue) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallbackValue;
 }
 
+function toSafeNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function escapeRegExp(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -357,6 +362,7 @@ async function scrapeInstagramHistoricalStats({ username, url }) {
         if (publishedDate >= threeYearsAgo) {
           postsStats.push({
             url: postData.url,
+            comments: comments,
             likes: likes,
             publishedAt: postData.publishedAt || null,
             publishedDate: publishedDate.toISOString().split('T')[0]
@@ -398,16 +404,20 @@ function calculateStats(posts) {
   }
 
   // Estadísticas básicas
-  const totalLikes = posts.reduce((sum, p) => sum + p.likes, 0);
-  const totalComments = posts.reduce((sum, p) => sum + p.comments, 0);
+  const totalLikes = posts.reduce((sum, p) => sum + toSafeNumber(p.likes), 0);
+  const totalComments = posts.reduce((sum, p) => sum + toSafeNumber(p.comments), 0);
   const averageLikes = Math.round(totalLikes / posts.length);
   const averageComments = Math.round(totalComments / posts.length);
 
   // Post con más likes
-  const postWithMostLikes = posts.reduce((max, p) => (p.likes > max.likes ? p : max), posts[0]);
+  const postWithMostLikes = posts.reduce((max, p) => (
+    toSafeNumber(p.likes) > toSafeNumber(max.likes) ? p : max
+  ), posts[0]);
 
   // Post con más comentarios
-  const postWithMostComments = posts.reduce((max, p) => (p.comments > max.comments ? p : max), posts[0]);
+  const postWithMostComments = posts.reduce((max, p) => (
+    toSafeNumber(p.comments) > toSafeNumber(max.comments) ? p : max
+  ), posts[0]);
 
   // Estadísticas mensuales
   const monthlyStats = {};
@@ -426,8 +436,8 @@ function calculateStats(posts) {
     }
 
     monthlyStats[monthKey].postCount += 1;
-    monthlyStats[monthKey].totalLikes += post.likes;
-    monthlyStats[monthKey].totalComments += post.comments;
+    monthlyStats[monthKey].totalLikes += toSafeNumber(post.likes);
+    monthlyStats[monthKey].totalComments += toSafeNumber(post.comments);
   });
 
   // Calcular promedios mensuales
@@ -445,12 +455,12 @@ function calculateStats(posts) {
     averageComments: averageComments,
     postWithMostLikes: {
       url: postWithMostLikes.url,
-      likes: postWithMostLikes.likes,
+      likes: toSafeNumber(postWithMostLikes.likes),
       publishedAt: postWithMostLikes.publishedAt
     },
     postWithMostComments: {
       url: postWithMostComments.url,
-      comments: postWithMostComments.comments,
+      comments: toSafeNumber(postWithMostComments.comments),
       publishedAt: postWithMostComments.publishedAt
     },
     monthlyStats: monthlyStats
