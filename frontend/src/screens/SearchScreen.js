@@ -88,10 +88,11 @@ export default function SearchScreen({ navigation, searchState, setSearchState }
         errorMessage: '',
         profileData: null,
         posts: [],
+        stats: null,
         noPosts: false
       }));
 
-      const [profileResponse, postsResponse] = await Promise.all([
+      const [profileResponse, postsResponse, statsResponse] = await Promise.all([
         fetch(`${API_URL}/instagram-profile`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -101,11 +102,17 @@ export default function SearchScreen({ navigation, searchState, setSearchState }
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
+        }),
+        fetch(`${API_URL}/instagram-stats`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         })
       ]);
 
       const profileResult = await profileResponse.json();
       const postsResult = await postsResponse.json();
+      const statsResult = await statsResponse.json();
 
       if (!profileResponse.ok || !profileResult.ok) {
         const notFoundMessage = profileResult?.message || 'El perfil no existe o no está disponible.';
@@ -147,12 +154,15 @@ export default function SearchScreen({ navigation, searchState, setSearchState }
         warningMessage = postsResult?.message || 'No fue posible obtener publicaciones.';
       }
 
+      const stats = statsResponse.ok && statsResult?.ok ? statsResult?.data?.stats || null : null;
+
       setSearchState((prev) => ({
         ...prev,
         username: extractedUsername,
         isLoading: false,
         profileData: profileResult.data,
         posts,
+        stats,
         noPosts,
         errorType: nextErrorType,
         errorMessage: warningMessage

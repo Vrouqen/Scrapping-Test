@@ -10,6 +10,7 @@ import SearchScreen from './src/screens/SearchScreen';
 import Header from './src/components/Header';
 import ProfileScreen from './src/screens/ProfileScreen';
 import GalleryScreen from './src/screens/GalleryScreen';
+import AnalyticsScreen from './src/screens/AnalyticsScreen';
 import { COLORS } from './src/theme';
 
 const Tab = createBottomTabNavigator();
@@ -32,6 +33,7 @@ export default function App() {
     isLoading: false,
     profileData: null,
     posts: [],
+    stats: null,
     noPosts: false,
     errorType: null,
     errorMessage: ''
@@ -78,6 +80,7 @@ export default function App() {
             if (route.name === 'Search') iconName = 'search';
             else if (route.name === 'Gallery') iconName = 'dashboard';
             else if (route.name === 'Profile') iconName = 'person';
+            else if (route.name === 'Analytics') iconName = 'analytics';
 
             return (
               <View style={[styles.iconContainer, focused && styles.activeIcon]}>
@@ -116,6 +119,17 @@ export default function App() {
         >
           {(props) => (
             <ProfileScreen
+              {...props}
+              searchState={searchState}
+            />
+          )}
+        </Tab.Screen>
+        <Tab.Screen
+          name="Analytics"
+          options={{ tabBarLabel: 'Analitics' }}
+        >
+          {(props) => (
+            <AnalyticsScreen
               {...props}
               searchState={searchState}
             />
