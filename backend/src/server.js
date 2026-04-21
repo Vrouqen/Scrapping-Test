@@ -27,6 +27,10 @@ app.use((err, _req, res, _next) => {
   });
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Backend escuchando en http://localhost:${port}`);
 });
+
+// ESTO QUITA EL TIMEOUT DEL SERVIDOR (0 = infinito)
+server.setTimeout(0); 
+server.keepAliveTimeout = 0;

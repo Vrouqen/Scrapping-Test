@@ -280,10 +280,10 @@ async function scrapeInstagramHistoricalStats({ username, url }) {
   try {
     const page = await context.newPage();
 
-    await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 300000 });
 
-    try {
-      await page.waitForSelector('a[href*="/p/"], a[href*="/reel/"]', { timeout: 10000 });
+        try {
+          await page.waitForSelector('a[href*="/p/"], a[href*="/reel/"]', { timeout: 300000 });
     } catch (e) {
       throw new Error('NO_POSTS_FOUND');
     }
@@ -296,15 +296,15 @@ async function scrapeInstagramHistoricalStats({ username, url }) {
     }
 
     const postsStats = [];
-    const fiveYearsAgo = new Date();
-    fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+    const threeYearsAgo = new Date();
+    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
 
     // Procesar cada post para extraer estadísticas
     for (const link of postLinks) {
       const postPage = await context.newPage();
 
       try {
-        await postPage.goto(link, { waitUntil: 'domcontentloaded', timeout: 10000 });
+        await postPage.goto(link, { waitUntil: 'domcontentloaded', timeout: 300000 });
 
         const postData = await postPage.evaluate(() => {
           const getMeta = (prop) => document.querySelector(`meta[property="${prop}"]`)?.getAttribute('content') || '';
@@ -353,13 +353,11 @@ async function scrapeInstagramHistoricalStats({ username, url }) {
         
         const publishedDate = new Date(postData.publishedAt);
 
-        // Filtrar solo publicaciones dentro de los últimos 5 años
-        if (publishedDate >= fiveYearsAgo) {
+        // Filtrar solo publicaciones dentro de los últimos 3 años
+        if (publishedDate >= threeYearsAgo) {
           postsStats.push({
             url: postData.url,
-            imageUrl: postData.image,
             likes: likes,
-            comments: comments,
             publishedAt: postData.publishedAt || null,
             publishedDate: publishedDate.toISOString().split('T')[0]
           });
