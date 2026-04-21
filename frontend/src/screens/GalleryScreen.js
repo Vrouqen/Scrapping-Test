@@ -110,10 +110,6 @@ export default function GalleryScreen({ searchState }) {
       {/* --- SECCIÓN: GALERÍA ASIMÉTRICA --- */}
       <View style={styles.galleryHeader}>
         <Text style={styles.galleryTitle}>Recent Posts</Text>
-        <View style={styles.archiveLink}>
-          <Text style={styles.archiveText}>View Archive</Text>
-          <MaterialIcons name="arrow-forward" size={16} color={COLORS.primary} />
-        </View>
       </View>
 
       {errorType === 'NETWORK' ? (
