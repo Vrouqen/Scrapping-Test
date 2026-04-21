@@ -1,5 +1,7 @@
 const { chromium } = require('playwright');
-const MAX_PUBLICATIONS = 1000; // Para capturar muchas publicaciones (últimos 5 años)
+const POSTS_PREVIEW_LIMIT = 10;
+const MAX_PUBLICATIONS = 1000; // Para capturar muchas publicaciones para análisis histórico
+const HISTORICAL_YEARS = 3;
 
 async function createInsaBrowser() {
   const headless = String(process.env.HEADLESS || 'true').toLowerCase() !== 'false';
@@ -203,7 +205,7 @@ async function scrapeInstagramProfile({ username, url }) {
 // ==========================================
 async function scrapeInstagramPosts({ username, url }) {
   const profileUrl = buildProfileUrl({ username, url });
-  const maxPosts = Math.min(parsePositiveIntEnv('MAX_POSTS_TO_SCRAPE', MAX_PUBLICATIONS), MAX_PUBLICATIONS);
+  const maxPosts = POSTS_PREVIEW_LIMIT;
   const maxScrolls = parsePositiveIntEnv('MAX_POSTS_SCROLL_ROUNDS', 200);
   const { browser, context } = await createInsaBrowser();
   try {
@@ -291,8 +293,7 @@ async function scrapeInstagramPosts({ username, url }) {
     return {
       requestedUrl: profileUrl,
       postsCount: detailedPosts.length,
-      recentPosts: detailedPosts.slice(0, MAX_PUBLICATIONS),
-      stats: calculateStats(detailedPosts)
+      recentPosts: detailedPosts.slice(0, POSTS_PREVIEW_LIMIT)
     };
   } finally {
     await browser.close();
@@ -327,7 +328,7 @@ async function scrapeInstagramHistoricalStats({ username, url }) {
 
     const postsStats = [];
     const threeYearsAgo = new Date();
-    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - HISTORICAL_YEARS);
 
     // Procesar cada post para extraer estadísticas
     for (const link of postLinks) {
@@ -378,8 +379,8 @@ async function scrapeInstagramHistoricalStats({ username, url }) {
         const likesMatch = postData.description.match(/([\d.,]+)\s+(likes|Me gusta)/i);
         const commentsMatch = postData.description.match(/([\d.,]+)\s+(comments|comentarios)/i);
 
-        const likes = likesMatch ? parseInt(likesMatch[1].replace(/[.,]/g, ''), 10) : 0;
-        const comments = commentsMatch ? parseInt(commentsMatch[1].replace(/[.,]/g, ''), 10) : 0;
+        const likes = parseEngagementNumber(likesMatch ? likesMatch[1] : '0');
+        const comments = parseEngagementNumber(commentsMatch ? commentsMatch[1] : '0');
         
         const publishedDate = new Date(postData.publishedAt);
 

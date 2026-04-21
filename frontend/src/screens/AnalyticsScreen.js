@@ -144,8 +144,8 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
     .slice(0, 3);
     
   const maxLikesInTimeline = timelineRows.reduce((max, item) => Math.max(max, Number(item.totalLikes) || 0), 0);
-  const trendPercent = timelineRows.length >= 2 && (Number(timelineRows.totalLikes) || 0) > 0
-    ? Math.round((((Number(timelineRows.totalLikes) || 0) - (Number(timelineRows.totalLikes) || 0)) / (Number(timelineRows.totalLikes) || 1)) * 100)
+  const trendPercent = timelineRows.length >= 2 && (Number(timelineRows[1].totalLikes) || 0) > 0
+    ? Math.round((((Number(timelineRows[0].totalLikes) || 0) - (Number(timelineRows[1].totalLikes) || 0)) / (Number(timelineRows[1].totalLikes) || 1)) * 100)
     : 0;
 
   return (
