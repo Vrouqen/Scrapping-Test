@@ -388,6 +388,7 @@ async function scrapeInstagramHistoricalStats({ username, url }) {
         if (publishedDate >= threeYearsAgo) {
           postsStats.push({
             url: postData.url,
+            imageUrl: postData.image || null,
             comments: comments,
             likes: likes,
             publishedAt: postData.publishedAt || null,
@@ -481,12 +482,14 @@ function calculateStats(posts) {
     averageComments: averageComments,
     postWithMostLikes: {
       url: postWithMostLikes.url,
+      imageUrl: postWithMostLikes.imageUrl || null,
       likes: toSafeNumber(postWithMostLikes.likes),
       comments: toSafeNumber(postWithMostLikes.comments),
       publishedAt: postWithMostLikes.publishedAt
     },
     postWithMostComments: {
       url: postWithMostComments.url,
+      imageUrl: postWithMostComments.imageUrl || null,
       comments: toSafeNumber(postWithMostComments.comments),
       publishedAt: postWithMostComments.publishedAt
     },

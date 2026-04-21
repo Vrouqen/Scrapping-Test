@@ -132,6 +132,7 @@ export default function App() {
             <AnalyticsScreen
               {...props}
               searchState={searchState}
+              setSearchState={setSearchState}
             />
           )}
         </Tab.Screen>

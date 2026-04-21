@@ -136,6 +136,8 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
 
   const bestPostLikes = stats?.postWithMostLikes ?? { likes: 0, comments: 0, url: '' };
   const bestPostComments = stats?.postWithMostComments ?? { comments: 0, url: '' };
+  const bestPostLikesImage = bestPostLikes?.imageUrl || '';
+  const bestPostCommentsImage = bestPostComments?.imageUrl || '';
   
   const monthlyStats = stats?.monthlyStats || {};
   const timelineRows = Object.entries(monthlyStats)
@@ -180,10 +182,10 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
           {/* Global Likes */}
           <View style={[styles.bentoCard, styles.cardCol2, { borderLeftWidth: 4, borderLeftColor: COLORS.primary }]}>
             <MaterialIcons name="favorite" size={24} color={COLORS.primary} style={styles.cardIcon} />
-            <Text style={styles.cardLabel}>CUMULATIVE ENGAGEMENT</Text>
+            <Text style={styles.cardLabel}>PARTICIPACIÓN ACUMULADA</Text>
             <View style={styles.rowBaseline}>
               <Text style={styles.cardNumberLarge}>{totalLikes.toLocaleString()}</Text>
-              <Text style={styles.cardTrend}>{trendPercent >= 0 ? `+${trendPercent}%` : `${trendPercent}%`} vs last month</Text>
+
             </View>
           </View>
 
@@ -191,14 +193,14 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
             {/* Total Comments */}
             <View style={[styles.bentoCard, styles.flex1, { marginRight: 8 }]}>
               <MaterialIcons name="chat-bubble" size={20} color={COLORS.secondary} style={styles.cardIcon} />
-              <Text style={styles.cardLabel}>TOTAL COMMENTS</Text>
+              <Text style={styles.cardLabel}>COMENTARIOS TOTALES</Text>
               <Text style={styles.cardNumber}>{totalComments.toLocaleString()}</Text>
             </View>
 
             {/* Analyzed Feed */}
             <View style={[styles.bentoCard, styles.flex1, { marginLeft: 8, backgroundColor: COLORS.surfaceLow }]}>
               <MaterialIcons name="grid-view" size={20} color={COLORS.textVariant} style={styles.cardIcon} />
-              <Text style={styles.cardLabel}>ANALYZED FEED</Text>
+              <Text style={styles.cardLabel}>ANÁLISIS DE FEED</Text>
               <Text style={styles.cardNumber}>{totalPosts} <Text style={styles.cardNumberSmall}>Posts</Text></Text>
             </View>
           </View>
@@ -210,7 +212,7 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
                 <MaterialIcons name="trending-up" size={20} color={COLORS.primary} />
               </View>
               <View style={styles.ml12}>
-                <Text style={styles.cardLabel}>AVG. LIKES</Text>
+                <Text style={styles.cardLabel}>PROM. LIKES</Text>
                 <Text style={styles.cardNumber}>{avgLikes.toLocaleString()}</Text>
               </View>
             </View>
@@ -221,7 +223,7 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
                 <MaterialIcons name="equalizer" size={20} color={COLORS.secondary} />
               </View>
               <View style={styles.ml12}>
-                <Text style={styles.cardLabel}>AVG. COMMENTS</Text>
+                <Text style={styles.cardLabel}>PROM. COMENT</Text>
                 <Text style={styles.cardNumber}>{avgComments.toLocaleString()}</Text>
               </View>
             </View>
@@ -230,12 +232,18 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
           {/* Peak Performance Post */}
           <View style={[styles.bentoCard, styles.cardCol2, { backgroundColor: COLORS.text }]}>
             <View style={styles.peakContent}>
-              <Image source={{ uri: bestPostLikes.url }} style={styles.peakImage} />
+              {bestPostLikesImage ? (
+                <Image source={{ uri: bestPostLikesImage }} style={styles.peakImage} />
+              ) : (
+                <View style={[styles.peakImage, styles.noImageBox]}>
+                  <MaterialIcons name="image-not-supported" size={24} color={COLORS.outline} />
+                </View>
+              )}
               <View style={styles.peakTextContainer}>
                 <View style={styles.peakChip}>
                   <Text style={styles.peakChipText}>PEAK PERFORMANCE</Text>
                 </View>
-                <Text style={styles.peakTitle}>Post with most engagement</Text>
+                <Text style={styles.peakTitle}>Post con más participación</Text>
                 <View style={styles.peakStats}>
                   <View style={styles.peakStatItem}>
                     <MaterialIcons name="favorite" size={14} color={COLORS.primary} />
@@ -253,7 +261,7 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
 
         {/* --- 3. TIMELINE & DISCUSSIONS --- */}
         <View style={styles.bottomSection}>
-          <Text style={styles.sectionTitle}>Timeline Analysis</Text>
+          <Text style={styles.sectionTitle}>Análisis de Línea de Tiempo</Text>
           <Text style={styles.sectionSubtitle}>Últimos meses analizados</Text>
 
           <View style={styles.timelineCard}>
@@ -294,13 +302,19 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
               
               <View style={styles.discussedHighlight}>
                 <View style={styles.rowSpaceBetween}>
-                  <Text style={styles.discussedHighlightLabel}>PEAK ENGAGEMENT</Text>
+                  <Text style={styles.discussedHighlightLabel}>PEAK PARTICIPACIÓN</Text>
                   <Text style={styles.discussedHighlightNumber}>{bestPostComments.comments}</Text>
                 </View>
                 <Text style={styles.discussedHighlightSub}>Comentarios en este post</Text>
               </View>
 
-              <Image source={{ uri: bestPostComments.url }} style={styles.discussedImage} />
+              {bestPostCommentsImage ? (
+                <Image source={{ uri: bestPostCommentsImage }} style={styles.discussedImage} />
+              ) : (
+                <View style={[styles.discussedImage, styles.noImageBox]}>
+                  <MaterialIcons name="image-not-supported" size={24} color={COLORS.outline} />
+                </View>
+              )}
             </View>
           ) : null}
         </View>
@@ -357,6 +371,7 @@ const styles = StyleSheet.create({
   /* Peak Performance */
   peakContent: { flexDirection: 'row', alignItems: 'center' },
   peakImage: { width: 80, height: 80, borderRadius: 12, marginRight: 16, backgroundColor: COLORS.surfaceLow },
+  noImageBox: { alignItems: 'center', justifyContent: 'center' },
   peakTextContainer: { flex: 1 },
   peakChip: { alignSelf: 'flex-start', backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginBottom: 8 },
   peakChipText: { color: '#fff', fontSize: 9, fontWeight: 'bold', letterSpacing: 1 },
