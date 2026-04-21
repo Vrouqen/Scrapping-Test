@@ -12,14 +12,6 @@ export default function Header() {
         <Text style={styles.brandText}>Curator</Text>
       </View>
       
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity>
-          <MaterialIcons name="history" size={28} color={COLORS.text} style={{ marginRight: 15 }} />
-        </TouchableOpacity>
-        <View style={styles.avatarContainer}>
-          <Image source={{ uri: 'https://i.pravatar.cc/100' }} style={styles.avatar} />
-        </View>
-      </View>
     </BlurView>
   );
 }
