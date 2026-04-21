@@ -8,7 +8,6 @@ Node.js
 Comandos:
 npm install
 npx playwright install chromium
-npm install @xenova/transformers
 npm run dev
 npx localtunnel --port 4000 (para online)
 

@@ -1,6 +1,6 @@
 const express = require('express');
 // Importamos ambas funciones
-const { scrapeInstagramProfile, scrapeInstagramPosts, scrapeInstagramRecentComments } = require('../scrapers/instagramScraper');
+const { scrapeInstagramProfile, scrapeInstagramPosts, scrapeInstagramHistoricalStats } = require('../scrapers/instagramScraper');
 
 const router = express.Router();
 
@@ -47,8 +47,8 @@ router.post('/instagram-posts', async (req, res, next) => {
   }
 });
 
-// --- ENDPOINT 3
-router.post('/instagram-comments', async (req, res, next) => {
+// --- ENDPOINT 3: ESTADÍSTICAS HISTÓRICAS
+router.post('/instagram-stats', async (req, res, next) => {
   try {
     const { username, url } = req.body || {};
 
@@ -56,7 +56,7 @@ router.post('/instagram-comments', async (req, res, next) => {
       return res.status(400).json({ ok: false, message: 'Debes enviar username o url en el body' });
     }
 
-    const result = await scrapeInstagramRecentComments({ username, url });
+    const result = await scrapeInstagramHistoricalStats({ username, url });
     return res.json({ ok: true, data: result });
   } catch (error) {
     if (error.message === 'NO_POSTS_FOUND') {
