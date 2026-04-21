@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { useFonts } from 'expo-font';
 
 import SearchScreen from './src/screens/SearchScreen';
 import Header from './src/components/Header';
@@ -22,6 +23,7 @@ const PlaceholderScreen = () => (
 );
 
 export default function App() {
+  const [fontsLoaded] = useFonts(MaterialIcons.font);
   const [searchState, setSearchState] = useState({
     inputValue: '',
     searchedValue: '',
@@ -34,6 +36,10 @@ export default function App() {
     errorType: null,
     errorMessage: ''
   });
+
+  if (!fontsLoaded) {
+    return null;
+  }
 
   return (
     <NavigationContainer>
@@ -81,7 +87,10 @@ export default function App() {
           },
         })}
       >
-        <Tab.Screen name="Search">
+        <Tab.Screen
+          name="Search"
+          options={{ tabBarLabel: 'Buscar' }}
+        >
           {(props) => (
             <SearchScreen
               {...props}
@@ -90,7 +99,10 @@ export default function App() {
             />
           )}
         </Tab.Screen>
-        <Tab.Screen name="Gallery">
+        <Tab.Screen
+          name="Gallery"
+          options={{ tabBarLabel: 'Galería' }}
+        >
           {(props) => (
             <GalleryScreen
               {...props}
@@ -98,7 +110,10 @@ export default function App() {
             />
           )}
         </Tab.Screen>
-        <Tab.Screen name="Profile">
+        <Tab.Screen
+          name="Profile"
+          options={{ tabBarLabel: 'Perfil' }}
+        >
           {(props) => (
             <ProfileScreen
               {...props}

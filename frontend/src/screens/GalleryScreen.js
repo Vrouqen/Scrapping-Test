@@ -54,7 +54,7 @@ export default function GalleryScreen({ searchState }) {
       <View style={styles.center}>
         <MaterialIcons name="image-search" size={60} color={COLORS.outline} />
         <Text style={styles.emptyText}>No hay visuales cargados</Text>
-        <Text style={styles.emptySubtext}>Ve a la pestaña Search para buscar un perfil.</Text>
+        <Text style={styles.emptySubtext}>Ve a la pestaña Buscar para buscar un perfil.</Text>
       </View>
     );
   }
