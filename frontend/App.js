@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import { View, StyleSheet, Text, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useFonts } from 'expo-font';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import SearchScreen from './src/screens/SearchScreen';
 import Header from './src/components/Header';
@@ -24,7 +25,16 @@ const PlaceholderScreen = () => (
 );
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
+  );
+}
+
+function AppContent() {
   const [fontsLoaded] = useFonts(MaterialIcons.font);
+  const insets = useSafeAreaInsets();
   const [searchState, setSearchState] = useState({
     inputValue: '',
     searchedValue: '',
@@ -44,9 +54,9 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <Header />
-      <Tab.Navigator
+      <NavigationContainer>
+        <Header />
+        <Tab.Navigator
         // Definimos 'Search' como la pantalla inicial obligatoria
         initialRouteName="Search"
         screenOptions={({ route }) => ({
@@ -62,18 +72,21 @@ export default function App() {
             bottom: 0,
             borderTopWidth: 0,
             elevation: 0,
-            height: 90,
-            paddingTop: 10,
-            paddingBottom: 30,
+            height: Platform.OS === 'web' ? 72 : 56 + insets.bottom,
+            paddingTop: Platform.OS === 'web' ? 8 : 6,
+            paddingBottom: Platform.OS === 'web' ? 8 : Math.max(insets.bottom, 10),
             backgroundColor: 'rgba(246, 246, 249, 0.8)',
             borderTopLeftRadius: 30,
             borderTopRightRadius: 30,
+          },
+          tabBarItemStyle: {
+            justifyContent: 'center',
           },
           tabBarLabelStyle: {
             fontSize: 10,
             fontWeight: 'bold',
             letterSpacing: 1,
-            marginTop: 4,
+            marginTop: 2,
           },
           tabBarIcon: ({ color, focused }) => {
             let iconName;
@@ -136,8 +149,8 @@ export default function App() {
             />
           )}
         </Tab.Screen>
-      </Tab.Navigator>
-    </NavigationContainer>
+        </Tab.Navigator>
+      </NavigationContainer>
   );
 }
 
@@ -155,8 +168,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   iconContainer: { 
-    paddingHorizontal: 20, 
-    paddingVertical: 5, 
+    paddingHorizontal: 16,
+    paddingVertical: 4,
     borderRadius: 12 
   },
   activeIcon: { 
