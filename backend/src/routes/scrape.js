@@ -67,6 +67,14 @@ router.post('/instagram-stats', async (req, res, next) => {
       });
     }
 
+    if (error.message === 'INSUFFICIENT_POSTS') {
+      return res.status(422).json({
+        ok: false,
+        errorCode: 'INSUFFICIENT_POSTS',
+        message: 'El perfil debe tener al menos 3 publicaciones para generar el análisis histórico.'
+      });
+    }
+
     return next(error);
   }
 });

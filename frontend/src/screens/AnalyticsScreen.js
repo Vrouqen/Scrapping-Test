@@ -5,6 +5,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { COLORS } from '../theme';
 
+const MIN_POSTS_FOR_HISTORICAL = 3;
+
+function parseProfilePostsCount(profileData) {
+  const onlyDigits = String(profileData?.metrics?.posts || '').replace(/[^\d]/g, '');
+  if (!onlyDigits) {
+    return 0;
+  }
+
+  return Number.parseInt(onlyDigits, 10);
+}
+
 export default function AnalyticsScreen({ navigation, searchState, setSearchState }) {
   // Estado local para manejar el loading exclusivo del análisis profundo
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -20,12 +31,23 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
     stats
   } = searchState || {};
 
+  const totalProfilePosts = parseProfilePostsCount(profileData);
+  const canAnalyzeHistorical = totalProfilePosts >= MIN_POSTS_FOR_HISTORICAL;
+
   // ==========================================
   // FUNCIÓN PARA LLAMAR AL ENDPOINT 3
   // ==========================================
   const handleAnalyze = async () => {
     const targetUser = username || searchedValue;
     if (!targetUser) return;
+
+    if (!canAnalyzeHistorical) {
+      Alert.alert(
+        'Análisis no disponible',
+        `Se requieren al menos ${MIN_POSTS_FOR_HISTORICAL} publicaciones para generar el análisis histórico.`
+      );
+      return;
+    }
 
     setIsAnalyzing(true);
 
@@ -41,6 +63,14 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
       const result = await response.json();
 
       if (!response.ok || !result.ok) {
+        if (result?.errorCode === 'INSUFFICIENT_POSTS') {
+          Alert.alert(
+            'Análisis no disponible',
+            result?.message || `Se requieren al menos ${MIN_POSTS_FOR_HISTORICAL} publicaciones para generar el análisis histórico.`
+          );
+          return;
+        }
+
         Alert.alert('Aviso', result.message || 'No se pudieron obtener las estadísticas históricas.');
         return;
       }
@@ -102,8 +132,13 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
         <Text style={styles.emptyText}>Análisis Histórico</Text>
         <Text style={styles.emptySubtext}>Genera un reporte avanzado de los últimos 3 años de @{username}</Text>
         
-        <TouchableOpacity activeOpacity={0.8} onPress={handleAnalyze} disabled={isAnalyzing} style={{ marginTop: 32 }}>
-          <LinearGradient colors={[COLORS.primary, COLORS.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.analyzeBtn}>
+        <TouchableOpacity activeOpacity={0.8} onPress={handleAnalyze} disabled={isAnalyzing || !canAnalyzeHistorical} style={{ marginTop: 32 }}>
+          <LinearGradient
+            colors={canAnalyzeHistorical ? [COLORS.primary, COLORS.secondary] : [COLORS.outline, COLORS.outline]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.analyzeBtn}
+          >
             {isAnalyzing ? (
               <>
                 <ActivityIndicator color="#fff" size="small" />
@@ -117,6 +152,12 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
             )}
           </LinearGradient>
         </TouchableOpacity>
+
+        {!canAnalyzeHistorical && (
+          <Text style={styles.disclaimerText}>
+            Este perfil necesita al menos {MIN_POSTS_FOR_HISTORICAL} publicaciones para habilitar el análisis histórico.
+          </Text>
+        )}
         
         {isAnalyzing && (
           <Text style={styles.disclaimerText}>Esto puede tomar hasta 1 minuto dependiendo de la cantidad de publicaciones.</Text>

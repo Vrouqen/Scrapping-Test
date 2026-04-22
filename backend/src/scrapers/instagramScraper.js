@@ -2,6 +2,7 @@ const { chromium } = require('playwright');
 const POSTS_PREVIEW_LIMIT = 10;
 const MAX_PUBLICATIONS = 1000; // Para capturar muchas publicaciones para análisis histórico
 const HISTORICAL_YEARS = 3;
+const MIN_POSTS_FOR_HISTORICAL = 3;
 
 async function createInsaBrowser() {
   const headless = String(process.env.HEADLESS || 'true').toLowerCase() !== 'false';
@@ -224,6 +225,10 @@ async function scrapeInstagramPosts({ username, url }) {
 
     if (!postLinks || postLinks.length === 0) {
       throw new Error('NO_POSTS_FOUND');
+    }
+
+    if (postLinks.length < MIN_POSTS_FOR_HISTORICAL) {
+      throw new Error('INSUFFICIENT_POSTS');
     }
 
     const detailedPosts = [];
