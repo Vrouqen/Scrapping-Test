@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { COLORS } from '../theme';
 
 const MIN_POSTS_FOR_HISTORICAL = 3;
+const TIMELINE_MONTHS_TO_SHOW = 12;
+const TIMELINE_COLLAPSED_MONTHS = 4;
+const MONTH_LABELS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 function parseProfilePostsCount(profileData) {
   const onlyDigits = String(profileData?.metrics?.posts || '').replace(/[^\d]/g, '');
@@ -16,9 +18,58 @@ function parseProfilePostsCount(profileData) {
   return Number.parseInt(onlyDigits, 10);
 }
 
+function parseMonthKey(monthKey) {
+  const [yearRaw, monthRaw] = String(monthKey || '').split('-');
+  const year = Number.parseInt(yearRaw, 10);
+  const month = Number.parseInt(monthRaw, 10);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return null;
+  }
+
+  return { year, month };
+}
+
+function buildTimelineRows(monthlyStats, monthsToShow) {
+  const source = monthlyStats && typeof monthlyStats === 'object' ? monthlyStats : {};
+  const monthKeys = Object.keys(source);
+
+  const parsedKeys = monthKeys
+    .map((key) => ({ key, parsed: parseMonthKey(key) }))
+    .filter((entry) => Boolean(entry.parsed));
+
+  const anchor = parsedKeys.length > 0
+    ? parsedKeys.sort((a, b) => {
+      const yearDiff = b.parsed.year - a.parsed.year;
+      if (yearDiff !== 0) return yearDiff;
+      return b.parsed.month - a.parsed.month;
+    })[0].parsed
+    : { year: new Date().getFullYear(), month: new Date().getMonth() + 1 };
+
+  const rows = [];
+  for (let i = 0; i < monthsToShow; i += 1) {
+    const date = new Date(anchor.year, anchor.month - 1 - i, 1);
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+    const data = source[monthKey] || {};
+
+    rows.push({
+      month: monthKey,
+      monthLabel: `${MONTH_LABELS_ES[month - 1]} ${String(year).slice(-2)}`,
+      postCount: Number(data.postCount) || 0,
+      totalLikes: Number(data.totalLikes) || 0,
+      totalComments: Number(data.totalComments) || 0
+    });
+  }
+
+  return rows;
+}
+
 export default function AnalyticsScreen({ navigation, searchState, setSearchState }) {
   // Estado local para manejar el loading exclusivo del análisis profundo
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
 
   const {
     hasSearched,
@@ -44,7 +95,7 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
     if (!canAnalyzeHistorical) {
       Alert.alert(
         'Análisis no disponible',
-        `Se requieren al menos ${MIN_POSTS_FOR_HISTORICAL} publicaciones para generar el análisis histórico.`
+        `Se requieren al menos ${MIN_POSTS_FOR_HISTORICAL} publicaciones para generar el análisis de los últimos 12 meses.`
       );
       return;
     }
@@ -66,7 +117,7 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
         if (result?.errorCode === 'INSUFFICIENT_POSTS') {
           Alert.alert(
             'Análisis no disponible',
-            result?.message || `Se requieren al menos ${MIN_POSTS_FOR_HISTORICAL} publicaciones para generar el análisis histórico.`
+            result?.message || `Se requieren al menos ${MIN_POSTS_FOR_HISTORICAL} publicaciones para generar el análisis de los últimos 12 meses.`
           );
           return;
         }
@@ -130,7 +181,7 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
           <MaterialIcons name="insights" size={48} color={COLORS.primary} />
         </View>
         <Text style={styles.emptyText}>Análisis Histórico</Text>
-        <Text style={styles.emptySubtext}>Genera un reporte avanzado de los últimos 3 años de @{username}</Text>
+        <Text style={styles.emptySubtext}>Genera un reporte avanzado de los últimos 12 meses de @{username}</Text>
         
         <TouchableOpacity activeOpacity={0.8} onPress={handleAnalyze} disabled={isAnalyzing || !canAnalyzeHistorical} style={{ marginTop: 32 }}>
           <LinearGradient
@@ -155,7 +206,7 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
 
         {!canAnalyzeHistorical && (
           <Text style={styles.disclaimerText}>
-            Este perfil necesita al menos {MIN_POSTS_FOR_HISTORICAL} publicaciones para habilitar el análisis histórico.
+            Este perfil necesita al menos {MIN_POSTS_FOR_HISTORICAL} publicaciones para habilitar el análisis de los últimos 12 meses.
           </Text>
         )}
         
@@ -180,16 +231,11 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
   const bestPostLikesImage = bestPostLikes?.imageUrl || '';
   const bestPostCommentsImage = bestPostComments?.imageUrl || '';
   
-  const monthlyStats = stats?.monthlyStats || {};
-  const timelineRows = Object.entries(monthlyStats)
-    .map(([month, data]) => ({ month, ...data }))
-    .sort((a, b) => b.month.localeCompare(a.month))
-    .slice(0, 3);
-    
-  const maxLikesInTimeline = timelineRows.reduce((max, item) => Math.max(max, Number(item.totalLikes) || 0), 0);
-  const trendPercent = timelineRows.length >= 2 && (Number(timelineRows[1].totalLikes) || 0) > 0
-    ? Math.round((((Number(timelineRows[0].totalLikes) || 0) - (Number(timelineRows[1].totalLikes) || 0)) / (Number(timelineRows[1].totalLikes) || 1)) * 100)
-    : 0;
+  const timelineRows = buildTimelineRows(stats?.monthlyStats, TIMELINE_MONTHS_TO_SHOW);
+  const visibleTimelineRows = isTimelineExpanded
+    ? timelineRows
+    : timelineRows.slice(0, TIMELINE_COLLAPSED_MONTHS);
+  const maxPostsInTimeline = timelineRows.reduce((max, item) => Math.max(max, item.postCount), 0);
 
   return (
     <View style={styles.mainContainer}>
@@ -302,23 +348,41 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
 
         {/* --- 3. TIMELINE & DISCUSSIONS --- */}
         <View style={styles.bottomSection}>
-          <Text style={styles.sectionTitle}>Análisis de Línea de Tiempo</Text>
-          <Text style={styles.sectionSubtitle}>Últimos meses analizados</Text>
+          <View style={styles.timelineHeaderRow}>
+            <View style={styles.timelineHeaderTextBlock}>
+              <Text style={styles.sectionTitle}>Análisis de Línea de Tiempo</Text>
+              <Text style={styles.sectionSubtitle}>Últimos 12 meses (incluye meses sin actividad)</Text>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setIsTimelineExpanded((prev) => !prev)}
+              style={styles.timelineToggleButton}
+            >
+              <Text style={styles.timelineToggleText}>{isTimelineExpanded ? 'Ver menos' : 'Ver todo'}</Text>
+              <MaterialIcons
+                name={isTimelineExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                size={20}
+                color={COLORS.textVariant}
+              />
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.timelineCard}>
-            {timelineRows.length === 0 ? (
+            {visibleTimelineRows.length === 0 ? (
               <Text style={styles.timelineValue}>Sin datos mensuales disponibles</Text>
             ) : (
-              timelineRows.map((row, index) => {
-                const rowLikes = Number(row.totalLikes) || 0;
-                const width = maxLikesInTimeline > 0 ? `${Math.max(20, Math.round((rowLikes / maxLikesInTimeline) * 100))}%` : '20%';
-                const isFirst = index === 0;
+              visibleTimelineRows.map((row, index) => {
+                const rowLikes = row.totalLikes;
+                const width = row.postCount === 0
+                  ? '0%'
+                  : `${Math.max(10, Math.round((row.postCount / Math.max(maxPostsInTimeline, 1)) * 100))}%`;
+                const isMostRecent = index === 0;
 
                 return (
                   <View style={styles.timelineRow} key={row.month}>
-                    <Text style={styles.timelineMonth}>{row.month}</Text>
+                    <Text style={styles.timelineMonth}>{row.monthLabel}</Text>
                     <View style={styles.timelineBarContainer}>
-                      {isFirst ? (
+                      {isMostRecent ? (
                         <LinearGradient colors={[COLORS.primary, COLORS.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.timelineBar, { width }]} />
                       ) : (
                         <View style={[styles.timelineBar, { width, backgroundColor: COLORS.surfaceLow }]} />
@@ -326,7 +390,7 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
                     </View>
                     <View style={styles.timelineData}>
                       <Text style={styles.timelinePosts}>{row.postCount} Posts</Text>
-                      <Text style={isFirst ? styles.timelineValuePrimary : styles.timelineValue}>{rowLikes.toLocaleString()}</Text>
+                      <Text style={isMostRecent ? styles.timelineValuePrimary : styles.timelineValue}>{rowLikes.toLocaleString()} likes</Text>
                     </View>
                   </View>
                 );
@@ -423,11 +487,15 @@ const styles = StyleSheet.create({
 
   /* Timeline */
   bottomSection: { marginBottom: 40 },
+  timelineHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  timelineHeaderTextBlock: { flex: 1, paddingRight: 10 },
+  timelineToggleButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, marginTop: 6 },
+  timelineToggleText: { fontSize: 12, fontWeight: 'bold', color: COLORS.textVariant, marginRight: 2 },
   sectionTitle: { fontSize: 24, fontWeight: '900', color: COLORS.text, letterSpacing: -0.5 },
   sectionSubtitle: { fontSize: 14, color: COLORS.textVariant, marginBottom: 16 },
   timelineCard: { backgroundColor: COLORS.surface, padding: 16, borderRadius: 20, marginBottom: 24 },
   timelineRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
-  timelineMonth: { width: 60, fontSize: 10, fontWeight: 'bold', color: COLORS.textVariant },
+  timelineMonth: { width: 60, fontSize: 11, fontWeight: 'bold', color: COLORS.textVariant },
   timelineBarContainer: { flex: 1, height: 24, justifyContent: 'center', paddingRight: 16 },
   timelineBar: { height: 24, borderRadius: 12 },
   timelineData: { width: 80, alignItems: 'flex-end' },

@@ -1,7 +1,7 @@
 const { chromium } = require('playwright');
 const POSTS_PREVIEW_LIMIT = 10;
 const MAX_PUBLICATIONS = 1000; // Para capturar muchas publicaciones para análisis histórico
-const HISTORICAL_YEARS = 3;
+const HISTORICAL_MONTHS = 12;
 const MIN_POSTS_FOR_HISTORICAL = 3;
 
 async function createInsaBrowser() {
@@ -402,6 +402,8 @@ async function scrapeInstagramPosts({ username, url }) {
 async function scrapeInstagramHistoricalStats({ username, url }) {
   const profileUrl = buildProfileUrl({ username, url });
   const maxScrolls = parsePositiveIntEnv('MAX_POSTS_SCROLL_ROUNDS', 200);
+  const maxStagnantRounds = parsePositiveIntEnv('MAX_POSTS_STAGNANT_ROUNDS', 6);
+  const maxPostsToInspect = parsePositiveIntEnv('MAX_HISTORICAL_POSTS_TO_INSPECT', MAX_PUBLICATIONS);
   const { browser, context } = await createInsaBrowser();
 
   try {
@@ -415,102 +417,148 @@ async function scrapeInstagramHistoricalStats({ username, url }) {
       throw new Error('NO_POSTS_FOUND');
     }
 
-    // Recolectar TODOS los posts (sin límite de 10)
-    const postLinks = await collectPostLinks(page, MAX_PUBLICATIONS, maxScrolls);
-
-    if (!postLinks || postLinks.length === 0) {
-      throw new Error('NO_POSTS_FOUND');
-    }
-
     const postsStats = [];
-    const threeYearsAgo = new Date();
-    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - HISTORICAL_YEARS);
+    const seenLinks = new Set();
+    const oldestAllowedDate = new Date();
+    oldestAllowedDate.setMonth(oldestAllowedDate.getMonth() - HISTORICAL_MONTHS);
+    let stagnantRounds = 0;
+    let skippedInvalidDate = 0;
+    let skippedOutOfRange = 0;
+    let failedPosts = 0;
 
-    // Procesar cada post para extraer estadísticas
-    for (const link of postLinks) {
-      const postPage = await context.newPage();
+    for (
+      let scrollRound = 0;
+      scrollRound < maxScrolls && stagnantRounds < maxStagnantRounds && seenLinks.size < maxPostsToInspect;
+      scrollRound += 1
+    ) {
+      const currentLinks = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]'))
+          .map((anchor) => anchor.getAttribute('href'))
+          .filter(Boolean)
+          .map((href) => href.startsWith('http') ? href : `https://www.instagram.com${href}`);
+      });
 
-      try {
-        await postPage.goto(link, { waitUntil: 'domcontentloaded', timeout: 300000 });
+      let discoveredNewLinks = 0;
 
-        const postData = await postPage.evaluate(() => {
-          const getMeta = (prop) => document.querySelector(`meta[property="${prop}"]`)?.getAttribute('content') || '';
-          const getNamedMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') || '';
-          
-          const timeTag = document.querySelector('time[datetime]')?.getAttribute('datetime') || '';
-          const articlePublished = getMeta('article:published_time');
-          const ogUpdated = getMeta('og:updated_time');
-          
-          // Intentar extraer JSON-LD para fecha
-          const jsonLdDate = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
-            .map((node) => node.textContent || '')
-            .map((text) => {
-              try {
-                const parsed = JSON.parse(text);
-                if (Array.isArray(parsed)) {
-                  const candidate = parsed.find((item) => item?.datePublished);
-                  return candidate?.datePublished || '';
-                }
-                return parsed?.datePublished || '';
-              } catch (_error) {
-                return '';
-              }
-            })
-            .find(Boolean) || '';
-
-          const publishedAt = timeTag || articlePublished || jsonLdDate || ogUpdated || getNamedMeta('date') || '';
-
-          // Extraer likes y comentarios de la descripción
-          const description = getMeta('og:description');
-          
-          return {
-            url: document.location.href,
-            image: getMeta('og:image'),
-            description: description,
-            publishedAt: publishedAt
-          };
-        });
-
-        // Parsear números de likes y comentarios
-        const likesMatch = postData.description.match(/([\d.,]+(?:\s*(?:k|m|mil|millones?))?)\s+(likes|Me gusta)/i);
-        const commentsMatch = postData.description.match(/([\d.,]+(?:\s*(?:k|m|mil|millones?))?)\s+(comments|comentarios)/i);
-
-        const likes = parseEngagementNumber(likesMatch ? likesMatch[1] : '0');
-        const comments = parseEngagementNumber(commentsMatch ? commentsMatch[1] : '0');
-        
-        const publishedDate = new Date(postData.publishedAt);
-
-        if (Number.isNaN(publishedDate.getTime())) {
-          continue;
-        }
-
-        if (publishedDate < threeYearsAgo) {
+      for (const link of currentLinks) {
+        if (seenLinks.size >= maxPostsToInspect) {
           break;
         }
 
-        postsStats.push({
-          url: postData.url,
-          imageUrl: postData.image || null,
-          comments: comments,
-          likes: likes,
-          publishedAt: postData.publishedAt || null,
-          publishedDate: publishedDate.toISOString().split('T')[0]
-        });
-      } catch (postError) {
-        console.log(`Error al extraer estadísticas del post ${link}:`, postError.message);
-      } finally {
-        await postPage.close();
+        if (seenLinks.has(link)) {
+          continue;
+        }
+
+        seenLinks.add(link);
+        discoveredNewLinks += 1;
+
+        const postPage = await context.newPage();
+
+        try {
+          await postPage.goto(link, { waitUntil: 'domcontentloaded', timeout: 300000 });
+
+          const postData = await postPage.evaluate(() => {
+            const getMeta = (prop) => document.querySelector(`meta[property="${prop}"]`)?.getAttribute('content') || '';
+            const getNamedMeta = (name) => document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') || '';
+
+            const timeTag = document.querySelector('time[datetime]')?.getAttribute('datetime') || '';
+            const articlePublished = getMeta('article:published_time');
+            const ogUpdated = getMeta('og:updated_time');
+
+            // Intentar extraer JSON-LD para fecha
+            const jsonLdDate = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
+              .map((node) => node.textContent || '')
+              .map((text) => {
+                try {
+                  const parsed = JSON.parse(text);
+                  if (Array.isArray(parsed)) {
+                    const candidate = parsed.find((item) => item?.datePublished);
+                    return candidate?.datePublished || '';
+                  }
+                  return parsed?.datePublished || '';
+                } catch (_error) {
+                  return '';
+                }
+              })
+              .find(Boolean) || '';
+
+            const publishedAt = timeTag || articlePublished || jsonLdDate || ogUpdated || getNamedMeta('date') || '';
+
+            // Extraer likes y comentarios de la descripción
+            const description = getMeta('og:description');
+
+            return {
+              url: document.location.href,
+              image: getMeta('og:image'),
+              description,
+              publishedAt
+            };
+          });
+
+          const likesMatch = postData.description.match(/([\d.,]+(?:\s*(?:k|m|mil|millones?))?)\s+(likes|Me gusta)/i);
+          const commentsMatch = postData.description.match(/([\d.,]+(?:\s*(?:k|m|mil|millones?))?)\s+(comments|comentarios)/i);
+
+          const likes = parseEngagementNumber(likesMatch ? likesMatch[1] : '0');
+          const comments = parseEngagementNumber(commentsMatch ? commentsMatch[1] : '0');
+
+          const publishedDate = new Date(postData.publishedAt);
+
+          if (Number.isNaN(publishedDate.getTime())) {
+            skippedInvalidDate += 1;
+            continue;
+          }
+
+          if (publishedDate < oldestAllowedDate) {
+            skippedOutOfRange += 1;
+            continue;
+          }
+
+          postsStats.push({
+            url: postData.url,
+            imageUrl: postData.image || null,
+            comments,
+            likes,
+            publishedAt: postData.publishedAt || null,
+            publishedDate: publishedDate.toISOString().split('T')[0]
+          });
+        } catch (postError) {
+          failedPosts += 1;
+          console.log(`Error al extraer estadísticas del post ${link}:`, postError.message);
+        } finally {
+          await postPage.close();
+        }
       }
+
+      if (discoveredNewLinks === 0) {
+        stagnantRounds += 1;
+      } else {
+        stagnantRounds = 0;
+      }
+
+      await page.mouse.wheel(0, 2500);
+      await page.waitForTimeout(1200);
     }
 
     // Calcular estadísticas
     const stats = calculateStats(postsStats);
+    const sortedPosts = postsStats.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
     return {
       requestedUrl: profileUrl,
       totalPostsAnalyzed: postsStats.length,
       stats: stats,
-      posts: postsStats.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
+      posts: sortedPosts,
+      diagnostics: {
+        scannedLinks: seenLinks.size,
+        skippedInvalidDate,
+        skippedOutOfRange,
+        failedPosts,
+        maxScrolls,
+        maxStagnantRounds,
+        maxPostsToInspect,
+        oldestCollectedPost: sortedPosts[sortedPosts.length - 1]?.publishedAt || null,
+        newestCollectedPost: sortedPosts[0]?.publishedAt || null
+      }
     };
   } finally {
     await browser.close();
