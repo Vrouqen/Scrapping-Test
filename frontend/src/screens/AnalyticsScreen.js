@@ -160,7 +160,7 @@ export default function AnalyticsScreen({ navigation, searchState, setSearchStat
         )}
         
         {isAnalyzing && (
-          <Text style={styles.disclaimerText}>Esto puede tomar hasta 1 minuto dependiendo de la cantidad de publicaciones.</Text>
+          <Text style={styles.disclaimerText}>Esto puede tomar varios minutos dependiendo de la cantidad de publicaciones.</Text>
         )}
       </View>
     );

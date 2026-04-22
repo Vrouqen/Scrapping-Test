@@ -36,6 +36,28 @@ function formatPublishedDate(publishedAt) {
   });
 }
 
+function getProfileSummary(profileData) {
+  const rawDescription = String(profileData?.profile?.ogDescription || '').trim();
+  if (!rawDescription) {
+    return 'Curating visual narratives across the digital landscape.';
+  }
+
+  if (/(followers?|seguidores|following|seguidos|posts?|publicaciones)/i.test(rawDescription)) {
+    return 'Perfil publico de Instagram';
+  }
+
+  return rawDescription;
+}
+
+function formatMetricValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return String(value || '0');
+  }
+
+  return numeric.toLocaleString('es-ES');
+}
+
 export default function GalleryScreen({ searchState }) {
   const {
     hasSearched,
@@ -91,16 +113,16 @@ export default function GalleryScreen({ searchState }) {
           
           <Text style={styles.usernameTitle}>@{username}</Text>
           <Text style={styles.bioText} numberOfLines={2}>
-            {profileData.profile?.ogDescription || 'Curating visual narratives across the digital landscape.'}
+            {getProfileSummary(profileData)}
           </Text>
 
           <View style={styles.statsContainer}>
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>{profileData.metrics?.followers || '0'}</Text>
+              <Text style={styles.statNumber}>{formatMetricValue(profileData.metrics?.followers)}</Text>
               <Text style={styles.statLabel}>FOLLOWERS</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={[styles.statNumber, { color: COLORS.tertiary }]}>{profileData.metrics?.posts || '0'}</Text>
+              <Text style={[styles.statNumber, { color: COLORS.tertiary }]}>{formatMetricValue(profileData.metrics?.posts)}</Text>
               <Text style={styles.statLabel}>POSTS</Text>
             </View>
           </View>

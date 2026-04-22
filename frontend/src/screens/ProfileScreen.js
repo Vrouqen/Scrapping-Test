@@ -20,8 +20,22 @@ function getBio(profileData) {
     return 'Digital Curator & Visual Storyteller.';
   }
 
+  // El og:description de Instagram suele traer métricas (followers/posts), no la bio real.
+  if (/(followers?|seguidores|following|seguidos|posts?|publicaciones)/i.test(rawDescription)) {
+    return 'Perfil publico de Instagram';
+  }
+
   const firstChunk = rawDescription.split('-')[0].trim();
-  return firstChunk || rawDescription;
+  return firstChunk || 'Perfil publico de Instagram';
+}
+
+function formatMetricValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return String(value || '0');
+  }
+
+  return numeric.toLocaleString('es-ES');
 }
 
 export default function ProfileScreen({ navigation, searchState }) {
@@ -122,15 +136,15 @@ export default function ProfileScreen({ navigation, searchState }) {
       {/* 2. METRICS GRID */}
       <View style={styles.metricsGrid}>
         <View style={styles.metricCard}>
-          <Text style={[styles.metricNumber, { color: COLORS.primary }]}>{profileData?.metrics?.followers || '0'}</Text>
+          <Text style={[styles.metricNumber, { color: COLORS.primary }]}>{formatMetricValue(profileData?.metrics?.followers)}</Text>
           <Text style={styles.metricLabel}>Followers</Text>
         </View>
         <View style={styles.metricCard}>
-          <Text style={styles.metricNumber}>{profileData?.metrics?.following || '0'}</Text>
+          <Text style={styles.metricNumber}>{formatMetricValue(profileData?.metrics?.following)}</Text>
           <Text style={styles.metricLabel}>Following</Text>
         </View>
         <View style={styles.metricCard}>
-          <Text style={styles.metricNumber}>{profileData?.metrics?.posts || '0'}</Text>
+          <Text style={styles.metricNumber}>{formatMetricValue(profileData?.metrics?.posts)}</Text>
           <Text style={styles.metricLabel}>Posts</Text>
         </View>
       </View>

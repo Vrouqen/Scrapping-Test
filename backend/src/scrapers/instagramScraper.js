@@ -54,16 +54,55 @@ function parseOgDescription(ogDescription) {
     return { followers: null, following: null, posts: null };
   }
 
-  // Bilingüe para inglés y español
-  const followersMatch = ogDescription.match(/([\d.,]+)\s+(Followers|seguidores)/i);
-  const followingMatch = ogDescription.match(/([\d.,]+)\s+(Following|seguidos)/i);
-  const postsMatch = ogDescription.match(/([\d.,]+)\s+(Posts?|publicaciones)/i);
+  // Bilingüe para inglés y español, soporta formatos compactos (k, m, mil, millones)
+  const followersMatch = ogDescription.match(/([\d.,]+(?:\s*(?:k|m|mil|millones?))?)\s+(Followers|seguidores)/i);
+  const followingMatch = ogDescription.match(/([\d.,]+(?:\s*(?:k|m|mil|millones?))?)\s+(Following|seguidos)/i);
+  const postsMatch = ogDescription.match(/([\d.,]+(?:\s*(?:k|m|mil|millones?))?)\s+(Posts?|publicaciones)/i);
 
   return {
-    followers: followersMatch ? followersMatch[1] : null,
-    following: followingMatch ? followingMatch[1] : null,
-    posts: postsMatch ? postsMatch[1] : null
+    followers: followersMatch ? parseEngagementNumber(followersMatch[1]) : null,
+    following: followingMatch ? parseEngagementNumber(followingMatch[1]) : null,
+    posts: postsMatch ? parseEngagementNumber(postsMatch[1]) : null
   };
+}
+
+function parseProfileMetricsFromBodyText(bodyText) {
+  const text = String(bodyText || '').replace(/\u00a0/g, ' ').trim();
+  if (!text) {
+    return { followers: null, following: null, posts: null };
+  }
+
+  const metricValuePattern = '[\\d.,]+(?:\\s*(?:k|m|mil|millones?))?';
+
+  const postsFollowersFollowing = new RegExp(
+    `(${metricValuePattern})\\s+(posts?|publicaciones)\\s+(${metricValuePattern})\\s+(followers|seguidores)\\s+(${metricValuePattern})\\s+(following|seguidos)`,
+    'i'
+  );
+
+  const followersFollowingPosts = new RegExp(
+    `(${metricValuePattern})\\s+(followers|seguidores)\\s+(${metricValuePattern})\\s+(following|seguidos)\\s+(${metricValuePattern})\\s+(posts?|publicaciones)`,
+    'i'
+  );
+
+  const firstMatch = text.match(postsFollowersFollowing);
+  if (firstMatch) {
+    return {
+      followers: parseEngagementNumber(firstMatch[3]),
+      following: parseEngagementNumber(firstMatch[5]),
+      posts: parseEngagementNumber(firstMatch[1])
+    };
+  }
+
+  const secondMatch = text.match(followersFollowingPosts);
+  if (secondMatch) {
+    return {
+      followers: parseEngagementNumber(secondMatch[1]),
+      following: parseEngagementNumber(secondMatch[3]),
+      posts: parseEngagementNumber(secondMatch[5])
+    };
+  }
+
+  return { followers: null, following: null, posts: null };
 }
 
 function parsePositiveIntEnv(name, fallbackValue) {
@@ -87,10 +126,13 @@ function parseEngagementNumber(value) {
     return 0;
   }
 
-  const compactMatch = normalized.match(/^([\d.,]+)\s*([km])$/i);
+  const compactMatch = normalized
+    .replace(/\s+/g, ' ')
+    .match(/^([\d\s.,]+?)\s*(k|m|mil|millones?)$/i);
   if (compactMatch) {
-    const base = Number.parseFloat(compactMatch[1].replace(/,/g, '.'));
-    const multiplier = compactMatch[2] === 'm' ? 1000000 : 1000;
+    const base = parseLocalizedNumber(compactMatch[1]);
+    const suffix = compactMatch[2];
+    const multiplier = suffix.startsWith('m') ? 1000000 : 1000;
     return Number.isFinite(base) ? Math.round(base * multiplier) : 0;
   }
 
@@ -100,6 +142,47 @@ function parseEngagementNumber(value) {
   }
 
   return Number.parseInt(digitsOnly, 10);
+}
+
+function parseLocalizedNumber(rawValue) {
+  const value = String(rawValue || '').trim().replace(/\s+/g, '');
+  if (!value) {
+    return 0;
+  }
+
+  const hasDot = value.includes('.');
+  const hasComma = value.includes(',');
+
+  if (!hasDot && !hasComma) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  if (hasDot && hasComma) {
+    const lastDot = value.lastIndexOf('.');
+    const lastComma = value.lastIndexOf(',');
+    const decimalSeparator = lastDot > lastComma ? '.' : ',';
+
+    const normalized = decimalSeparator === '.'
+      ? value.replace(/,/g, '')
+      : value.replace(/\./g, '').replace(',', '.');
+
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  const separator = hasComma ? ',' : '.';
+  const [integerPart, decimalPart] = value.split(separator);
+
+  // Si hay 3 dígitos después del separador, asumimos separador de miles.
+  if (decimalPart && decimalPart.length === 3) {
+    const parsed = Number.parseFloat(`${integerPart}${decimalPart}`);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  const normalized = hasComma ? value.replace(',', '.') : value;
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function escapeRegExp(value) {
@@ -177,11 +260,19 @@ async function scrapeInstagramProfile({ username, url }) {
         ogTitle,
         ogDescription,
         profileImage: ogImage,
-        canonicalUrl
+        canonicalUrl,
+        bodyText: document.body?.innerText || ''
       };
     });
 
-    const parsedMetrics = parseOgDescription(data.ogDescription);
+    const bodyMetrics = parseProfileMetricsFromBodyText(data.bodyText);
+    const ogMetrics = parseOgDescription(data.ogDescription);
+
+    const parsedMetrics = {
+      followers: bodyMetrics.followers ?? ogMetrics.followers,
+      following: bodyMetrics.following ?? ogMetrics.following,
+      posts: bodyMetrics.posts ?? ogMetrics.posts
+    };
 
     return {
       requestedUrl: profileUrl,
@@ -273,8 +364,8 @@ async function scrapeInstagramPosts({ username, url }) {
           };
         });
 
-        const likesMatch = postData.description.match(/([\d.,]+)\s+(likes|Me gusta)/i);
-        const commentsMatch = postData.description.match(/([\d.,]+)\s+(comments|comentarios)/i);
+        const likesMatch = postData.description.match(/([\d.,]+(?:\s*(?:k|m|mil|millones?))?)\s+(likes|Me gusta)/i);
+        const commentsMatch = postData.description.match(/([\d.,]+(?:\s*(?:k|m|mil|millones?))?)\s+(comments|comentarios)/i);
 
         const parsedLikes = parseEngagementNumber(likesMatch ? likesMatch[1] : '0');
         const parsedComments = parseEngagementNumber(commentsMatch ? commentsMatch[1] : '0');
@@ -381,25 +472,30 @@ async function scrapeInstagramHistoricalStats({ username, url }) {
         });
 
         // Parsear números de likes y comentarios
-        const likesMatch = postData.description.match(/([\d.,]+)\s+(likes|Me gusta)/i);
-        const commentsMatch = postData.description.match(/([\d.,]+)\s+(comments|comentarios)/i);
+        const likesMatch = postData.description.match(/([\d.,]+(?:\s*(?:k|m|mil|millones?))?)\s+(likes|Me gusta)/i);
+        const commentsMatch = postData.description.match(/([\d.,]+(?:\s*(?:k|m|mil|millones?))?)\s+(comments|comentarios)/i);
 
         const likes = parseEngagementNumber(likesMatch ? likesMatch[1] : '0');
         const comments = parseEngagementNumber(commentsMatch ? commentsMatch[1] : '0');
         
         const publishedDate = new Date(postData.publishedAt);
 
-        // Filtrar solo publicaciones dentro de los últimos 3 años
-        if (publishedDate >= threeYearsAgo) {
-          postsStats.push({
-            url: postData.url,
-            imageUrl: postData.image || null,
-            comments: comments,
-            likes: likes,
-            publishedAt: postData.publishedAt || null,
-            publishedDate: publishedDate.toISOString().split('T')[0]
-          });
+        if (Number.isNaN(publishedDate.getTime())) {
+          continue;
         }
+
+        if (publishedDate < threeYearsAgo) {
+          break;
+        }
+
+        postsStats.push({
+          url: postData.url,
+          imageUrl: postData.image || null,
+          comments: comments,
+          likes: likes,
+          publishedAt: postData.publishedAt || null,
+          publishedDate: publishedDate.toISOString().split('T')[0]
+        });
       } catch (postError) {
         console.log(`Error al extraer estadísticas del post ${link}:`, postError.message);
       } finally {
